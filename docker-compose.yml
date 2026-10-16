@@ -1,0 +1,60 @@
+# ===========================================================
+# AI QUANT TRADING PLATFORM — Docker Compose
+# ===========================================================
+# Infrastructure services: PostgreSQL + TimescaleDB, Redis
+#
+# Usage:
+#   docker compose up -d          # Start services
+#   docker compose down           # Stop services
+#   docker compose logs -f db     # View database logs
+#   docker compose exec db psql -U trading trading_platform
+# ===========================================================
+
+services:
+  # ── PostgreSQL + TimescaleDB ────────────────
+  db:
+    image: timescale/timescaledb:latest-pg16
+    container_name: trading-db
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: trading_platform
+      POSTGRES_USER: trading
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-trading_dev_password}
+    volumes:
+      - pgdata:/home/postgres/pgdata/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trading -d trading_platform"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    shm_size: "256mb"  # Needed for complex queries
+
+  # ── Redis ───────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: trading-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: >
+      redis-server
+        --maxmemory 512mb
+        --maxmemory-policy allkeys-lru
+        --appendonly yes
+        --appendfsync everysec
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+    driver: local
+  redisdata:
+    driver: local

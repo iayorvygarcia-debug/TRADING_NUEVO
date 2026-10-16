@@ -1,0 +1,62 @@
+# ── Python ──────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+ai_quant_trading_platform.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+.pytest_cache/
+.ruff_cache/
+scratch/
+
+
+# ── Environment ─────────────────────────────
+.env
+.env.local
+.env.production
+
+# ── IDE ─────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── OS ──────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Docker ──────────────────────────────────
+docker-data/
+
+# ── ML Models ───────────────────────────────
+ml/models/*.pkl
+ml/models/*.joblib
+ml/models/*.pt
+ml/models/*.onnx
+
+# ── Data ────────────────────────────────────
+*.parquet
+*.csv
+!tests/data/*.csv
+
+# ── Logs ────────────────────────────────────
+logs/
+*.log
+
+# ── Node (Dashboard) ───────────────────────
+node_modules/
+.next/
+out/
+
+# ── Secrets ─────────────────────────────────
+*.pem
+*.key
+secrets/

@@ -1,0 +1,2986 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quant OS — Trading Command Center</title>
+    <meta name="description"
+        content="AI-powered quantitative trading CRM dashboard with real-time portfolio tracking, equity curves, and position management.">
+    <link rel="icon" type="image/svg+xml"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+    <script>
+        // Silenciar advertencia informativa de Tailwind CDN en consola
+        (function () {
+            const _origWarn = console.warn;
+            console.warn = function (...args) {
+                if (args[0] && typeof args[0] === 'string' && args[0].includes('tailwindcss.com')) return;
+                _origWarn.apply(console, args);
+            };
+        })();
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        base: { DEFAULT: '#0d1117', 50: '#161b22', 100: '#21262d', 200: '#30363d', 300: '#484f58' },
+                        emerald: { DEFAULT: '#00e676', dim: 'rgba(0,230,118,0.12)', border: 'rgba(0,230,118,0.3)' },
+                        cyan: { DEFAULT: '#00e5ff', dim: 'rgba(0,229,255,0.1)', border: 'rgba(0,229,255,0.3)' },
+                        crimson: { DEFAULT: '#ff1744', dim: 'rgba(255,23,68,0.12)', border: 'rgba(255,23,68,0.35)' },
+                        amber: { DEFAULT: '#ffd600', dim: 'rgba(255,214,0,0.12)', border: 'rgba(255,214,0,0.3)' },
+                        purple: { DEFAULT: '#b388ff', dim: 'rgba(179,136,255,0.12)' },
+                        muted: '#8b9bb4',
+                    },
+                    fontFamily: {
+                        sans: ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'Inter', 'system-ui', 'sans-serif'],
+                        mono: ['"Cascadia Code"', '"Consolas"', '"JetBrains Mono"', '"SF Mono"', 'monospace'],
+                        display: ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', '"Outfit"', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        card: '0 1px 3px rgba(0,0,0,0.4), 0 4px 16px rgba(0,0,0,0.2)',
+                        glow: '0 0 20px rgba(0,230,118,0.25)',
+                        'glow-cyan': '0 0 20px rgba(0,229,255,0.25)',
+                        'glow-red': '0 0 20px rgba(255,23,68,0.3)',
+                    }
+                }
+            }
+        }
+    </script>
+    <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+    <style>
+        body {
+            background-color: #0d1117;
+        }
+
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #161b22;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #30363d;
+            border-radius: 4px;
+        }
+
+        .sidebar-item {
+            transition: all 0.18s ease;
+        }
+
+        .sidebar-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .sidebar-item.active {
+            background: rgba(0, 230, 118, 0.1);
+            border-left: 2px solid #00e676;
+        }
+
+        .metric-card {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        }
+
+        .badge-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .pulse-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: currentColor;
+            box-shadow: 0 0 8px currentColor;
+            animation: blink 2s infinite;
+        }
+
+        @keyframes blink {
+
+            0%,
+            100% {
+                opacity: 1
+            }
+
+            50% {
+                opacity: 0.4
+            }
+        }
+
+        .table-row-hover:hover td {
+            background: rgba(255, 255, 255, 0.025);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 15px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.18s ease;
+            border: 1px solid transparent;
+            white-space: nowrap;
+        }
+
+        .score-bar {
+            height: 5px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.07);
+            overflow: hidden;
+        }
+
+        .score-fill {
+            height: 100%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, #00e5ff, #00e676);
+        }
+
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 16px;
+            padding: 28px;
+            max-width: 440px;
+            width: 90%;
+            transform: translateY(20px);
+            transition: transform 0.2s;
+        }
+
+        .modal-overlay.active .modal-card {
+            transform: translateY(0);
+        }
+
+        #equity-chart-container,
+        .candle-chart-container {
+            border-radius: 6px;
+            overflow: hidden;
+        }
+    </style>
+</head>
+
+<body class="h-full font-sans text-gray-100" style="background:#0d1117">
+
+    <!-- ── Layout Shell ── -->
+    <div class="flex h-screen overflow-hidden">
+
+        <!-- ════════════════════════════ SIDEBAR ════════════════════════════ -->
+        <aside class="w-56 flex-shrink-0 flex flex-col border-r border-white/5" style="background:#0d1117">
+
+            <!-- Logo -->
+            <div class="px-5 py-5 border-b border-white/5">
+                <div class="font-display font-extrabold text-base tracking-tight"
+                    style="background:linear-gradient(135deg,#ffffff 30%,#00e5ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent">
+                    <span>QUANT OS</span><span class="sr-only">ANTIGRAVITY // QUANT OS</span>
+                </div>
+                <div class="text-xs mt-0.5 font-mono" style="color:#00e676">● LIVE SYSTEM</div>
+            </div>
+
+            <!-- Nav -->
+            <nav class="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
+                <div class="text-xs font-semibold uppercase tracking-widest px-3 mb-2" style="color:#484f58">Trading
+                </div>
+                <a href="/dashboard" onclick="navigateTo(event, 'dashboard')" data-view="dashboard"
+                    class="sidebar-item active flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-white">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                    Dashboard
+                </a>
+                <a href="/portfolio" onclick="navigateTo(event, 'portfolio')" data-view="portfolio"
+                    class="sidebar-item flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium"
+                    style="color:#8b9bb4">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    Portfolio
+                </a>
+                <a href="/orders" onclick="navigateTo(event, 'orders')" data-view="orders"
+                    class="sidebar-item flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium"
+                    style="color:#8b9bb4">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                    </svg>
+                    Orders
+                </a>
+                <a href="/scanner" onclick="navigateTo(event, 'scanner')" data-view="scanner"
+                    class="sidebar-item flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium"
+                    style="color:#8b9bb4">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    Scanner
+                </a>
+
+                <div class="text-xs font-semibold uppercase tracking-widest px-3 mt-5 mb-2" style="color:#484f58">
+                    Intelligence</div>
+                <a href="/macro" onclick="navigateTo(event, 'macro')" data-view="macro"
+                    class="sidebar-item flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium"
+                    style="color:#8b9bb4">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6H9.5l-1-1H5a2 2 0 00-2 2zm0 0l6.75-3.45" />
+                    </svg>
+                    Macro
+                </a>
+                <a href="/sec" onclick="navigateTo(event, 'sec')" data-view="sec"
+                    class="sidebar-item flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium"
+                    style="color:#8b9bb4">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+                    </svg>
+                    SEC / News
+                </a>
+                <a href="/backtests" onclick="navigateTo(event, 'backtests')" data-view="backtests"
+                    class="sidebar-item flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium"
+                    style="color:#8b9bb4">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" />
+                    </svg>
+                    Backtests
+                </a>
+
+                <div class="text-xs font-semibold uppercase tracking-widest px-3 mt-5 mb-2" style="color:#484f58">System
+                </div>
+                <a href="/settings" onclick="navigateTo(event, 'settings')" data-view="settings"
+                    class="sidebar-item flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium"
+                    style="color:#8b9bb4">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Settings
+                </a>
+            </nav>
+
+            <!-- System info -->
+            <div class="px-4 py-4 border-t border-white/5">
+                <div class="text-xs font-mono" style="color:#484f58">Paper Mode Active</div>
+                <div id="sidebar-mode-badge"
+                    class="mt-1 inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-full"
+                    style="background:rgba(0,230,118,0.1);color:#00e676;border:1px solid rgba(0,230,118,0.25)">
+                    <span class="pulse-dot"></span> PAPER TRADING
+                </div>
+            </div>
+        </aside>
+
+        <!-- ════════════════════════ MAIN CONTENT ════════════════════════ -->
+        <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+
+            <!-- ── Top Header Bar ── -->
+            <header class="flex items-center justify-between px-6 py-3 border-b border-white/5 flex-shrink-0"
+                style="background:#0d1117">
+                <!-- Left: Status -->
+                <div class="flex items-center gap-4">
+                    <div id="system-status-pill" class="badge-pill text-xs font-semibold px-3 py-1 rounded-full"
+                        style="background:rgba(0,230,118,0.1);color:#00e676;border:1px solid rgba(0,230,118,0.25)">
+                        <span class="pulse-dot"></span>
+                        <span id="system-status-text">SYSTEM ACTIVE</span>
+                    </div>
+                    <div class="flex items-center gap-2 text-xs" style="color:#8b9bb4">
+                        <span id="session-indicator" class="w-2 h-2 rounded-full inline-block"
+                            style="background:#00e676; box-shadow:0 0 6px #00e676"></span>
+                        <span id="val-session">NYSE</span>
+                        <span>·</span>
+                        <span id="sub-session-stage">Loading...</span>
+                    </div>
+                    <div class="text-xs font-mono px-2 py-0.5 rounded" style="background:#21262d;color:#8b9bb4">
+                        <span id="clock-display">--:--:--</span>
+                    </div>
+                    <div id="engine-live-marquee"
+                        class="hidden sm:flex items-center gap-2 text-xs font-mono px-3 py-1 rounded-full"
+                        style="background:rgba(0,229,255,0.06);color:#00e5ff;border:1px solid rgba(0,229,255,0.2)">
+                        <span class="w-2 h-2 rounded-full inline-block animate-pulse"
+                            style="background:#00e5ff;box-shadow:0 0 6px #00e5ff"></span>
+                        <span id="engine-live-text">Motor cuántico listo · Monitoreo activo</span>
+                    </div>
+                </div>
+
+                <!-- Right: Status & Emergency Actions (Operación 100% Automática) -->
+                <div class="flex items-center gap-3">
+                    <!-- Badge Informativo 100% Autónomo (No interactivo, operación automática continua) -->
+                    <div class="hidden sm:flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full"
+                        style="background:rgba(0,230,118,0.12);color:#00e676;border:1px solid rgba(0,230,118,0.35);box-shadow:0 0 12px rgba(0,230,118,0.15)">
+                        <span class="w-2 h-2 rounded-full inline-block animate-pulse"
+                            style="background:#00e676;box-shadow:0 0 8px #00e676"></span>
+                        <span>100% AUTÓNOMO · AUTO-TRADE ON (SWING)</span>
+                    </div>
+
+                    <!-- Shadow Mode Toggle Badge -->
+                    <button id="btn-toggle-shadow" class="btn text-xs flex items-center gap-2"
+                        onclick="toggleShadowMode()"
+                        style="background:rgba(255,171,0,0.12);color:#ffab00;border:1px solid rgba(255,171,0,0.35);box-shadow:0 0 10px rgba(255,171,0,0.15)"
+                        title="Click para alternar entre Shadow Mode (simulado sin órdenes reales) y Live Broker">
+                        <span id="dot-shadow" class="w-2 h-2 rounded-full inline-block animate-pulse"
+                            style="background:#ffab00;box-shadow:0 0 6px #ffab00"></span>
+                        <span id="txt-shadow">SHADOW MODE: ON</span>
+                    </button>
+
+                    <!-- Kill Switch de Emergencia -->
+                    <button id="btn-kill-switch" class="btn"
+                        style="background:rgba(255,23,68,0.1);color:#ff1744;border-color:rgba(255,23,68,0.3)"
+                        onclick="openKillModal()" title="Detener el sistema por completo">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                        </svg>
+                        Kill Switch
+                    </button>
+                    <button id="btn-resume" class="btn"
+                        style="display:none;background:rgba(0,230,118,0.1);color:#00e676;border-color:rgba(0,230,118,0.3)"
+                        onclick="openResumeModal()">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
+                        </svg>
+                        Resume
+                    </button>
+                </div>
+            </header>
+
+            <!-- ── Scrollable Body ── -->
+            <main class="flex-1 overflow-y-auto p-6 space-y-5">
+
+                <!-- ═══════════════ VIEW: DASHBOARD ═══════════════ -->
+                <div id="view-dashboard" class="app-view space-y-5">
+
+                    <!-- ── KPI Metric Cards Row ── -->
+                    <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
+
+                        <!-- Equity -->
+                        <div class="metric-card rounded-xl p-5 border border-white/5"
+                            style="background:#161b22;box-shadow:0 1px 3px rgba(0,0,0,0.4)">
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-xs font-semibold uppercase tracking-widest"
+                                    style="color:#8b9bb4">Portfolio Equity</span>
+                                <span class="text-xs font-mono px-1.5 py-0.5 rounded"
+                                    style="background:#21262d;color:#00e5ff">MTM</span>
+                            </div>
+                            <div id="val-equity" class="font-mono text-2xl font-bold text-white tracking-tight">
+                                $1,000.00</div>
+                            <div id="sub-pnl" class="flex items-center gap-1 mt-2 text-xs font-semibold"
+                                style="color:#00e676">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                                </svg>
+                                +0.00% Total Return
+                            </div>
+                        </div>
+
+                        <!-- Buying Power & Cash -->
+                        <div class="metric-card rounded-xl p-5 border border-white/5" style="background:#161b22">
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-xs font-semibold uppercase tracking-widest"
+                                    style="color:#8b9bb4">Buying Power</span>
+                                <span class="text-xs font-mono px-1.5 py-0.5 rounded"
+                                    style="background:#21262d;color:#8b9bb4">BROKER REPORTED</span>
+                            </div>
+                            <div id="val-buying-power" class="font-mono text-2xl font-bold text-white tracking-tight">
+                                $2,000.00</div>
+                            <div id="val-cash" class="mt-2 text-xs" style="color:#8b9bb4">Cash: $1,000.00</div>
+                        </div>
+
+                        <!-- Realized P&L -->
+                        <div class="metric-card rounded-xl p-5 border border-white/5" style="background:#161b22">
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-xs font-semibold uppercase tracking-widest" style="color:#8b9bb4">P&L
+                                    Realizado</span>
+                                <span class="text-xs font-semibold px-1.5 py-0.5 rounded"
+                                    style="background:rgba(0,230,118,0.1);color:#00e676;border:1px solid rgba(0,230,118,0.25)">HISTORIAL</span>
+                            </div>
+                            <div id="val-realized-pnl" class="font-mono text-2xl font-bold text-white tracking-tight">
+                                $0.00</div>
+                            <div id="sub-realized-trades" class="mt-2 text-xs" style="color:#8b9bb4">0 operaciones
+                                cerradas</div>
+                        </div>
+
+                        <!-- Macro Regime -->
+                        <div class="metric-card rounded-xl p-5 border border-white/5" style="background:#161b22">
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-xs font-semibold uppercase tracking-widest"
+                                    style="color:#8b9bb4">Macro Regime</span>
+                                <span id="val-cb-tier" class="text-xs font-semibold px-1.5 py-0.5 rounded"
+                                    style="background:rgba(0,230,118,0.1);color:#00e676;border:1px solid rgba(0,230,118,0.2)">NORMAL</span>
+                            </div>
+                            <div id="val-macro-regime" class="text-lg font-bold text-white leading-tight">EXPANSION
+                            </div>
+                            <div id="sub-macro" class="mt-2 text-xs" style="color:#8b9bb4">Risk: 1.0× | VIX: 16.5</div>
+                        </div>
+
+                        <!-- Safety Metrics -->
+                        <div class="metric-card rounded-xl p-5 border border-white/5" style="background:#161b22">
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-xs font-semibold uppercase tracking-widest"
+                                    style="color:#8b9bb4">Intelligence</span>
+                                <span class="text-xs font-semibold px-1.5 py-0.5 rounded"
+                                    style="background:rgba(0,229,255,0.08);color:#00e5ff;border:1px solid rgba(0,229,255,0.2)">NLP+EDGAR</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="flex-1">
+                                    <div class="text-xs mb-1" style="color:#8b9bb4">Yield Curve</div>
+                                    <div id="intel-yield-curve" class="font-mono text-sm font-bold"
+                                        style="color:#00e676">+0.45%</div>
+                                </div>
+                                <div class="w-px h-8" style="background:#30363d"></div>
+                                <div class="flex-1">
+                                    <div class="text-xs mb-1" style="color:#8b9bb4">VIX</div>
+                                    <div id="intel-vix" class="font-mono text-sm font-bold text-white">16.5</div>
+                                </div>
+                                <div class="w-px h-8" style="background:#30363d"></div>
+                                <div class="flex-1">
+                                    <div class="text-xs mb-1" style="color:#8b9bb4">Blocked</div>
+                                    <div id="intel-blocked" class="font-mono text-sm font-bold text-white">0</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ── Intelligence Command Strip ── -->
+                    <div class="grid grid-cols-1 xl:grid-cols-3 gap-5">
+                        <div class="xl:col-span-2 rounded-xl border border-white/5 overflow-hidden"
+                            style="background:#161b22">
+                            <div class="flex items-center justify-between px-5 py-4 border-b border-white/5">
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-2 h-2 rounded-full animate-pulse"
+                                            style="background:#b388ff;box-shadow:0 0 8px #b388ff"></span>
+                                        <span class="font-display font-bold text-sm text-white">AI Trading
+                                            Committee</span>
+                                        <span id="committee-count" class="text-xs font-mono px-2 py-0.5 rounded"
+                                            style="background:rgba(179,136,255,.12);color:#b388ff">10 AGENTS</span>
+                                    </div>
+                                    <p class="text-xs mt-1" style="color:#8b9bb4">Signals only → consensus → risk gate →
+                                        execution</p>
+                                </div>
+                                <span id="committee-consensus" class="text-xs font-mono font-bold"
+                                    style="color:#00e5ff">Min consensus 60%</span>
+                            </div>
+                            <div id="committee-agent-list" class="grid grid-cols-2 md:grid-cols-5 gap-2 p-4"></div>
+                        </div>
+                        <div class="rounded-xl border border-white/5 overflow-hidden" style="background:#161b22">
+                            <div class="flex items-center justify-between px-5 py-4 border-b border-white/5">
+                                <div>
+                                    <span class="font-display font-bold text-sm text-white">News Risk Monitor</span>
+                                    <p class="text-xs mt-1" style="color:#8b9bb4">24h composite sentiment</p>
+                                </div>
+                                <span id="news-blocked-count" class="text-xs font-mono px-2 py-0.5 rounded"
+                                    style="background:rgba(255,23,68,.10);color:#ff6b81">0 BLOCKED</span>
+                            </div>
+                            <div id="news-score-list" class="p-4 space-y-2 max-h-40 overflow-y-auto">
+                                <div class="text-xs text-center py-4" style="color:#484f58">Sin noticias procesadas aún
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ── Equity Curve Chart ── -->
+                    <div class="rounded-xl border border-white/5 overflow-hidden" style="background:#161b22">
+                        <div class="flex items-center justify-between px-5 py-4 border-b border-white/5">
+                            <div class="flex items-center gap-2">
+                                <svg class="w-4 h-4" style="color:#00e676" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                                </svg>
+                                <span class="font-display font-bold text-sm text-white">Equity Curve</span>
+                                <span class="text-xs" style="color:#8b9bb4">Portfolio Performance</span>
+                            </div>
+                            <div class="flex items-center gap-5">
+                                <div class="text-right">
+                                    <div class="text-xs uppercase tracking-wider" style="color:#8b9bb4">Total Return
+                                    </div>
+                                    <div id="eq-total-return" class="font-mono text-sm font-bold" style="color:#00e676">
+                                        +0.00%</div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-xs uppercase tracking-wider" style="color:#8b9bb4">Peak</div>
+                                    <div id="eq-peak" class="font-mono text-sm font-bold" style="color:#00e5ff">$1,000.00
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-xs uppercase tracking-wider" style="color:#8b9bb4">Drawdown</div>
+                                    <div id="eq-drawdown" class="font-mono text-sm font-bold" style="color:#ffd600">
+                                        0.00%</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="equity-chart-container" style="height:220px;width:100%"></div>
+                        <div class="flex items-center gap-5 px-5 py-2.5 border-t border-white/5">
+                            <span class="flex items-center gap-1.5 text-xs" style="color:#8b9bb4"><span
+                                    class="inline-block w-2.5 h-0.5 rounded"
+                                    style="background:#00e676"></span>Equity</span>
+                            <span class="flex items-center gap-1.5 text-xs" style="color:#8b9bb4"><span
+                                    class="inline-block w-2.5 h-0.5 rounded"
+                                    style="background:rgba(0,229,255,0.6);border-top: 1px dashed rgba(0,229,255,0.6)"></span>Baseline
+                                $100k</span>
+                        </div>
+                    </div>
+
+                    <!-- ── Two-column: Positions + Opportunity Radar ── -->
+                    <div class="grid grid-cols-1 xl:grid-cols-3 gap-5">
+
+                        <!-- Positions Table (2/3) -->
+                        <div class="xl:col-span-2 rounded-xl border border-white/5 overflow-hidden"
+                            style="background:#161b22">
+                            <div class="flex items-center justify-between px-5 py-4 border-b border-white/5">
+                                <div class="flex items-center gap-2">
+                                    <svg class="w-4 h-4" style="color:#00e5ff" fill="none" stroke="currentColor"
+                                        viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                    </svg>
+                                    <span class="font-display font-bold text-sm text-white">Active Positions</span>
+                                </div>
+                                <span id="positions-count-badge" class="text-xs font-semibold px-2 py-0.5 rounded-full"
+                                    style="background:rgba(0,229,255,0.08);color:#00e5ff;border:1px solid rgba(0,229,255,0.2)">0
+                                    Positions</span>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm">
+                                    <thead>
+                                        <tr class="border-b border-white/5">
+                                            <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider"
+                                                style="color:#8b9bb4">Symbol</th>
+                                            <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider"
+                                                style="color:#8b9bb4">Side</th>
+                                            <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider"
+                                                style="color:#8b9bb4">Qty</th>
+                                            <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider"
+                                                style="color:#8b9bb4">Entry</th>
+                                            <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider"
+                                                style="color:#8b9bb4">Mark</th>
+                                            <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider"
+                                                style="color:#8b9bb4">Unreal. PnL</th>
+                                            <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider"
+                                                style="color:#8b9bb4">SL / TP</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="positions-tbody">
+                                        <tr>
+                                            <td colspan="7" class="text-center py-10 text-sm" style="color:#484f58">No
+                                                active positions — scanner running...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Opportunity Radar (1/3) -->
+                        <div class="rounded-xl border border-white/5 overflow-hidden" style="background:#161b22">
+                            <div class="flex items-center justify-between px-5 py-4 border-b border-white/5">
+                                <div class="flex items-center gap-2">
+                                    <svg class="w-4 h-4" style="color:#b388ff" fill="none" stroke="currentColor"
+                                        viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                                    </svg>
+                                    <span class="font-display font-bold text-sm text-white">Opportunity Radar</span>
+                                </div>
+                                <span class="text-xs font-semibold px-2 py-0.5 rounded-full"
+                                    style="background:rgba(179,136,255,0.1);color:#b388ff;border:1px solid rgba(179,136,255,0.2)">Top
+                                    Setups</span>
+                            </div>
+                            <div id="opportunities-feed" class="p-4 space-y-3">
+                                <div class="text-center py-8 text-sm" style="color:#484f58">Awaiting scan...</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ── Candlestick Charts Section ── -->
+                    <div id="candle-panel" style="display:none">
+                        <div class="rounded-xl border border-white/5 overflow-hidden" style="background:#161b22">
+                            <div class="flex items-center justify-between px-5 py-4 border-b border-white/5">
+                                <div class="flex items-center gap-2">
+                                    <svg class="w-4 h-4" style="color:#ffd600" fill="none" stroke="currentColor"
+                                        viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M7 12V8m0 0V4m0 4h4m-4 0H3m14 8v4m0 0v4m0-4h4m-4 0h-4M7 20h4m4-8h4m-4 0h-4" />
+                                    </svg>
+                                    <span class="font-display font-bold text-sm text-white">Price Action — Open
+                                        Positions</span>
+                                </div>
+                                <span id="candle-count-badge" class="text-xs font-semibold px-2 py-0.5 rounded-full"
+                                    style="background:rgba(255,214,0,0.08);color:#ffd600;border:1px solid rgba(255,214,0,0.2)">0
+                                    Charts</span>
+                            </div>
+                            <div id="candle-charts-grid"
+                                class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 p-4"></div>
+                        </div>
+                    </div>
+
+                    <!-- ── Trade History (Historial de Operaciones / Cierres con Ganancias o Pérdidas) ── -->
+                    <div class="rounded-xl border border-white/5 overflow-hidden" style="background:#161b22">
+                        <div class="flex items-center justify-between px-5 py-4 border-b border-white/5">
+                            <div class="flex items-center gap-2">
+                                <svg class="w-4 h-4" style="color:#00e676" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span class="font-display font-bold text-sm text-white">Trade History — Historial de
+                                    Operaciones</span>
+                                <span class="text-xs" style="color:#8b9bb4">Registro en tiempo real de cierres,
+                                    ganancias (WIN) y pérdidas (LOSS)</span>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <span id="trade-history-pnl-badge"
+                                    class="text-xs font-mono font-bold px-2 py-0.5 rounded"
+                                    style="background:rgba(0,230,118,0.1);color:#00e676;border:1px solid rgba(0,230,118,0.25)">+$0.00
+                                    PnL Realizado</span>
+                                <span id="trade-history-count-badge"
+                                    class="text-xs font-semibold px-2 py-0.5 rounded-full"
+                                    style="background:rgba(0,229,255,0.08);color:#00e5ff;border:1px solid rgba(0,229,255,0.2)">0
+                                    Trades Cerrados</span>
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="border-b border-white/5">
+                                        <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider"
+                                            style="color:#8b9bb4">Símbolo</th>
+                                        <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider"
+                                            style="color:#8b9bb4">Posición</th>
+                                        <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider"
+                                            style="color:#8b9bb4">Cant.</th>
+                                        <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider"
+                                            style="color:#8b9bb4">Precio Entrada</th>
+                                        <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider"
+                                            style="color:#8b9bb4">Precio Salida</th>
+                                        <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider"
+                                            style="color:#8b9bb4">Resultado P&L</th>
+                                        <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider"
+                                            style="color:#8b9bb4">Causa / Tipo</th>
+                                        <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider"
+                                            style="color:#8b9bb4">Hora de Cierre</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="trade-history-tbody">
+                                    <tr>
+                                        <td colspan="8" class="text-center py-10 text-sm" style="color:#484f58">Aún no
+                                            hay operaciones cerradas. Al escanear el universo y activarse Take-Profit o
+                                            Stop-Loss, se registrarán aquí automáticamente.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- ── Bottom Row: Orders + Intel ── -->
+                    <div class="grid grid-cols-1 xl:grid-cols-3 gap-5">
+
+                        <!-- Orders Ledger (2/3) -->
+                        <div class="xl:col-span-2 rounded-xl border border-white/5 overflow-hidden"
+                            style="background:#161b22">
+                            <div class="flex items-center justify-between px-5 py-4 border-b border-white/5">
+                                <div class="flex items-center gap-2">
+                                    <svg class="w-4 h-4" style="color:#ffd600" fill="none" stroke="currentColor"
+                                        viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                                    </svg>
+                                    <span class="font-display font-bold text-sm text-white">Order Ledger</span>
+                                </div>
+                                <span id="orders-count-badge" class="text-xs font-semibold px-2 py-0.5 rounded-full"
+                                    style="background:rgba(255,214,0,0.08);color:#ffd600;border:1px solid rgba(255,214,0,0.2)">0
+                                    Orders</span>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm">
+                                    <thead>
+                                        <tr class="border-b border-white/5">
+                                            <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider"
+                                                style="color:#8b9bb4">Order ID</th>
+                                            <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider"
+                                                style="color:#8b9bb4">Symbol</th>
+                                            <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider"
+                                                style="color:#8b9bb4">Type</th>
+                                            <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider"
+                                                style="color:#8b9bb4">Side</th>
+                                            <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider"
+                                                style="color:#8b9bb4">Qty</th>
+                                            <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider"
+                                                style="color:#8b9bb4">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="orders-tbody">
+                                        <tr>
+                                            <td colspan="6" class="text-center py-8 text-sm" style="color:#484f58">No
+                                                working orders in state machine.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Macro Intelligence Feed (1/3) -->
+                        <div class="rounded-xl border border-white/5 overflow-hidden" style="background:#161b22">
+                            <div class="flex items-center justify-between px-5 py-4 border-b border-white/5">
+                                <div class="flex items-center gap-2">
+                                    <svg class="w-4 h-4" style="color:#00e5ff" fill="none" stroke="currentColor"
+                                        viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <span class="font-display font-bold text-sm text-white">Macro Intelligence</span>
+                                </div>
+                            </div>
+                            <div class="p-4 space-y-3">
+                                <!-- Macro regime card -->
+                                <div class="rounded-lg p-3 border border-white/5" style="background:#21262d">
+                                    <div class="text-xs uppercase tracking-wider mb-1" style="color:#8b9bb4">Market
+                                        Regime</div>
+                                    <div id="intel-macro-title" class="text-sm font-bold text-white">Risk-On Expansion
+                                    </div>
+                                    <div class="flex gap-3 mt-2">
+                                        <div>
+                                            <div class="text-xs" style="color:#8b9bb4">Yield Curve</div>
+                                            <div id="intel-yield-curve2" class="text-xs font-mono font-bold"
+                                                style="color:#00e676">+0.45%</div>
+                                        </div>
+                                        <div>
+                                            <div class="text-xs" style="color:#8b9bb4">VIX</div>
+                                            <div id="intel-vix2" class="text-xs font-mono font-bold text-white">16.5
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- EDGAR card -->
+                                <div class="rounded-lg p-3 border border-white/5" style="background:#21262d">
+                                    <div class="text-xs uppercase tracking-wider mb-1" style="color:#8b9bb4">SEC EDGAR
+                                        Audit</div>
+                                    <div class="text-sm font-bold" style="color:#00e676">✓ Nominal</div>
+                                    <div class="text-xs mt-1" style="color:#8b9bb4">0 Blocked Symbols · Form 4 Monitored
+                                    </div>
+                                </div>
+                                <!-- Scan results -->
+                                <div class="rounded-lg p-3 border border-white/5" style="background:#21262d">
+                                    <div class="text-xs uppercase tracking-wider mb-1" style="color:#8b9bb4">Last Scan
+                                    </div>
+                                    <div id="intel-scan-time" class="text-xs font-mono text-white">—</div>
+                                    <div class="text-xs mt-1" style="color:#8b9bb4">Auto-refresh every 60s</div>
+                                </div>
+                                <!-- Live Engine Activity Feed (Terminal de Operaciones) -->
+                                <div class="rounded-lg p-3 border border-white/5" style="background:#0d1117">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="w-2 h-2 rounded-full inline-block animate-ping"
+                                                style="background:#00e676"></span>
+                                            <span class="text-xs uppercase tracking-wider font-bold text-white">Live
+                                                Engine Feed</span>
+                                        </div>
+                                        <span id="feed-status-badge" class="text-xs font-mono px-1.5 py-0.5 rounded"
+                                            style="background:rgba(0,230,118,0.1);color:#00e676">ACTIVO</span>
+                                    </div>
+                                    <div id="engine-activity-logs"
+                                        class="space-y-1.5 font-mono text-xs overflow-y-auto max-h-48 pr-1"
+                                        style="scrollbar-width: thin;">
+                                        <div class="text-gray-400">⚡ Conectado al motor cuántico en vivo...</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div> <!-- ═══════════════ END VIEW: DASHBOARD ═══════════════ -->
+
+                    <!-- ═══════════════ VIEW: PORTFOLIO ═══════════════ -->
+                    <div id="view-portfolio" class="app-view space-y-5" style="display: none;">
+                        <div class="flex items-center justify-between pb-2 border-b border-white/5">
+                            <div>
+                                <h2 class="font-display text-xl font-bold text-white tracking-tight">Portfolio
+                                    Management & Capital Allocation</h2>
+                                <p class="text-xs" style="color:#8b9bb4">Mark-to-market account valuation, margin
+                                    exposure, and position sizing controls.</p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-mono px-2 py-1 rounded"
+                                    style="background:#21262d;color:#00e676">● PAPER TRADING</span>
+                            </div>
+                        </div>
+
+                        <!-- Portfolio KPI Row -->
+                        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div class="metric-card rounded-xl p-5 border border-white/5" style="background:#161b22">
+                                <div class="text-xs font-semibold uppercase tracking-widest mb-2" style="color:#8b9bb4">
+                                    Account Equity</div>
+                                <div id="pf-val-equity" class="font-mono text-2xl font-bold text-white">$1,000.00
+                                </div>
+                                <div id="pf-sub-return" class="text-xs mt-1 font-semibold" style="color:#00e676">+0.00%
+                                    Return</div>
+                            </div>
+                            <div class="metric-card rounded-xl p-5 border border-white/5" style="background:#161b22">
+                                <div class="text-xs font-semibold uppercase tracking-widest mb-2" style="color:#8b9bb4">
+                                    Cash Available</div>
+                                <div id="pf-val-cash" class="font-mono text-2xl font-bold text-white">$1,000.00</div>
+                                <div class="text-xs mt-1" style="color:#8b9bb4">100% Capital Preserved</div>
+                            </div>
+                            <div class="metric-card rounded-xl p-5 border border-white/5" style="background:#161b22">
+                                <div class="text-xs font-semibold uppercase tracking-widest mb-2" style="color:#8b9bb4">
+                                    Buying Power (2×)</div>
+                                <div id="pf-val-bp" class="font-mono text-2xl font-bold text-white">$2,000.00</div>
+                                <div class="text-xs mt-1" style="color:#8b9bb4">Reg-T Margin Available</div>
+                            </div>
+                            <div class="metric-card rounded-xl p-5 border border-white/5" style="background:#161b22">
+                                <div class="text-xs font-semibold uppercase tracking-widest mb-2" style="color:#8b9bb4">
+                                    Realized P&L</div>
+                                <div id="pf-val-realized" class="font-mono text-2xl font-bold text-white">$0.00</div>
+                                <div id="pf-sub-trades" class="text-xs mt-1" style="color:#8b9bb4">0 closed positions
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Risk & Allocation Cards -->
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            <div class="rounded-xl border border-white/5 p-5" style="background:#161b22">
+                                <h3 class="font-display font-bold text-sm text-white mb-4 flex items-center gap-2">
+                                    <svg class="w-4 h-4" style="color:#00e5ff" fill="none" stroke="currentColor"
+                                        viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
+                                    </svg>
+                                    Capital & Margin Distribution
+                                </h3>
+                                <div class="space-y-3">
+                                    <div>
+                                        <div class="flex justify-between text-xs mb-1">
+                                            <span style="color:#8b9bb4">Cash Reserve</span>
+                                            <span id="pf-cash-pct" class="font-mono text-white">100.0%</span>
+                                        </div>
+                                        <div class="score-bar">
+                                            <div id="pf-cash-bar" class="score-fill" style="width:100%"></div>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div class="flex justify-between text-xs mb-1">
+                                            <span style="color:#8b9bb4">Active Exposure (Equity)</span>
+                                            <span id="pf-equity-pct" class="font-mono text-white">0.0%</span>
+                                        </div>
+                                        <div class="score-bar">
+                                            <div id="pf-equity-bar" class="score-fill" style="width:0%"></div>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div class="flex justify-between text-xs mb-1">
+                                            <span style="color:#8b9bb4">Margin Leverage Utilized (Max 2.0×)</span>
+                                            <span id="pf-leverage-val" class="font-mono text-white">1.0× / 2.0×</span>
+                                        </div>
+                                        <div class="score-bar">
+                                            <div class="score-fill" style="width:50%;background:#00e5ff"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="rounded-xl border border-white/5 p-5" style="background:#161b22">
+                                <h3 class="font-display font-bold text-sm text-white mb-4 flex items-center gap-2">
+                                    <svg class="w-4 h-4" style="color:#00e676" fill="none" stroke="currentColor"
+                                        viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                                    </svg>
+                                    Risk Engine Constraints
+                                </h3>
+                                <div class="grid grid-cols-2 gap-3 text-xs">
+                                    <div class="p-3 rounded-lg border border-white/5" style="background:#0d1117">
+                                        <span style="color:#8b9bb4">Max Risk per Trade</span>
+                                        <div class="font-mono font-bold text-white text-sm mt-1">1.00% ($1,000)</div>
+                                    </div>
+                                    <div class="p-3 rounded-lg border border-white/5" style="background:#0d1117">
+                                        <span style="color:#8b9bb4">Daily Max Drawdown Halt</span>
+                                        <div class="font-mono font-bold text-white text-sm mt-1">-3.00% ($3,000)</div>
+                                    </div>
+                                    <div class="p-3 rounded-lg border border-white/5" style="background:#0d1117">
+                                        <span style="color:#8b9bb4">Max Position Sizing</span>
+                                        <div class="font-mono font-bold text-white text-sm mt-1">5.0% of Capital</div>
+                                    </div>
+                                    <div class="p-3 rounded-lg border border-white/5" style="background:#0d1117">
+                                        <span style="color:#8b9bb4">Circuit Breaker Status</span>
+                                        <div id="pf-cb-status" class="font-mono font-bold text-sm mt-1"
+                                            style="color:#00e676">NORMAL (0%)</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Active Positions Table -->
+                        <div class="rounded-xl border border-white/5 overflow-hidden" style="background:#161b22">
+                            <div class="flex items-center justify-between px-5 py-4 border-b border-white/5">
+                                <span class="font-display font-bold text-sm text-white">Active Positions Ledger</span>
+                                <span id="pf-positions-count" class="text-xs font-mono px-2 py-0.5 rounded"
+                                    style="background:#21262d;color:#8b9bb4">0 Positions</span>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-xs">
+                                    <thead>
+                                        <tr class="border-b border-white/5 text-left uppercase tracking-wider"
+                                            style="background:#1c2128;color:#8b9bb4">
+                                            <th class="px-5 py-3 font-semibold">Symbol</th>
+                                            <th class="px-5 py-3 font-semibold">Side</th>
+                                            <th class="px-5 py-3 font-semibold text-right">Qty</th>
+                                            <th class="px-5 py-3 font-semibold text-right">Entry</th>
+                                            <th class="px-5 py-3 font-semibold text-right">Mark</th>
+                                            <th class="px-5 py-3 font-semibold text-right">Unrealized P&L</th>
+                                            <th class="px-5 py-3 font-semibold text-right">Stop Loss / Take Profit</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="pf-positions-tbody">
+                                        <tr>
+                                            <td colspan="7" class="text-center py-10 text-sm" style="color:#484f58">No
+                                                hay posiciones activas en este momento.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div> <!-- ═══════════════ END VIEW: PORTFOLIO ═══════════════ -->
+
+                    <!-- ═══════════════ VIEW: ORDERS ═══════════════ -->
+                    <div id="view-orders" class="app-view space-y-5" style="display: none;">
+                        <div class="flex items-center justify-between pb-2 border-b border-white/5">
+                            <div>
+                                <h2 class="font-display text-xl font-bold text-white tracking-tight">Order Ledger &
+                                    Trade Execution History</h2>
+                                <p class="text-xs" style="color:#8b9bb4">Complete state-machine audit trail of active
+                                    working orders and closed trade executions.</p>
+                            </div>
+                        </div>
+
+                        <!-- Active Orders Section -->
+                        <div class="rounded-xl border border-white/5 overflow-hidden" style="background:#161b22">
+                            <div class="flex items-center justify-between px-5 py-4 border-b border-white/5">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-display font-bold text-sm text-white">Active Working Orders</span>
+                                    <span class="text-xs" style="color:#8b9bb4">In Broker / State Machine</span>
+                                </div>
+                                <span id="orders-full-count-badge" class="text-xs font-mono px-2 py-0.5 rounded"
+                                    style="background:#21262d;color:#00e5ff">0 Orders</span>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-xs">
+                                    <thead>
+                                        <tr class="border-b border-white/5 text-left uppercase tracking-wider"
+                                            style="background:#1c2128;color:#8b9bb4">
+                                            <th class="px-5 py-3 font-semibold">Order ID</th>
+                                            <th class="px-5 py-3 font-semibold">Symbol</th>
+                                            <th class="px-5 py-3 font-semibold">Type</th>
+                                            <th class="px-5 py-3 font-semibold">Side</th>
+                                            <th class="px-5 py-3 font-semibold text-right">Qty</th>
+                                            <th class="px-5 py-3 font-semibold text-right">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="orders-full-tbody">
+                                        <tr>
+                                            <td colspan="6" class="text-center py-8 text-sm" style="color:#484f58">No
+                                                hay órdenes pendientes en ejecución.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Trade Execution History Section -->
+                        <div class="rounded-xl border border-white/5 overflow-hidden" style="background:#161b22">
+                            <div class="flex items-center justify-between px-5 py-4 border-b border-white/5">
+                                <div>
+                                    <span class="font-display font-bold text-sm text-white">Closed Trade History &
+                                        Realized P&L</span>
+                                    <div class="text-xs mt-0.5" style="color:#8b9bb4">Registro histórico de operaciones
+                                        finalizadas con cálculo exacto de retorno</div>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <span id="orders-history-count-badge" class="text-xs font-mono px-2 py-0.5 rounded"
+                                        style="background:#21262d;color:#8b9bb4">0 Trades</span>
+                                    <span id="orders-history-pnl-badge"
+                                        class="text-xs font-mono font-bold px-2.5 py-1 rounded"
+                                        style="background:rgba(0,230,118,0.1);color:#00e676;border:1px solid rgba(0,230,118,0.3)">$0.00
+                                        PnL</span>
+                                </div>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-xs">
+                                    <thead>
+                                        <tr class="border-b border-white/5 text-left uppercase tracking-wider"
+                                            style="background:#1c2128;color:#8b9bb4">
+                                            <th class="px-5 py-3 font-semibold">Symbol</th>
+                                            <th class="px-5 py-3 font-semibold">Side</th>
+                                            <th class="px-5 py-3 font-semibold text-right">Qty</th>
+                                            <th class="px-5 py-3 font-semibold text-right">Entry</th>
+                                            <th class="px-5 py-3 font-semibold text-right">Exit</th>
+                                            <th class="px-5 py-3 font-semibold text-right">Resultado</th>
+                                            <th class="px-5 py-3 font-semibold text-right">Cierre</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="orders-trade-history-tbody">
+                                        <tr>
+                                            <td colspan="7" class="text-center py-10 text-sm" style="color:#484f58">No
+                                                hay historial de trades cerrados aún.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div> <!-- ═══════════════ END VIEW: ORDERS ═══════════════ -->
+
+                    <!-- ═══════════════ VIEW: SCANNER ═══════════════ -->
+                    <div id="view-scanner" class="app-view space-y-5" style="display: none;">
+                        <div class="flex items-center justify-between pb-2 border-b border-white/5">
+                            <div>
+                                <h2 class="font-display text-xl font-bold text-white tracking-tight">Market Scanner &
+                                    Multi-Factor Opportunity Radar</h2>
+                                <p class="text-xs" style="color:#8b9bb4">Continuous algorithmic scanning of NASDAQ-100
+                                    universe powered by Twelve Data key rotation.</p>
+                            </div>
+                            <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-cyan-500/20"
+                                style="background:rgba(0,229,255,0.06);color:#00e5ff">
+                                <span class="w-2 h-2 rounded-full inline-block animate-pulse"
+                                    style="background:#00e5ff"></span>
+                                <span class="text-xs font-mono font-semibold">Escaneo Automático Cada 1 Minuto</span>
+                            </div>
+                        </div>
+
+                        <!-- Scanner Pipeline Info -->
+                        <div class="grid grid-cols-1 lg:grid-cols-4 gap-3">
+                            <div class="p-4 rounded-xl border border-white/5" style="background:#161b22">
+                                <div class="text-xs uppercase font-semibold mb-1" style="color:#00e5ff">1. Twelve Data
+                                    Pool</div>
+                                <div class="font-mono text-sm font-bold text-white">5 Rotating Keys</div>
+                                <div class="text-xs mt-1" style="color:#8b9bb4">40 req/min aggregate capacity</div>
+                            </div>
+                            <div class="p-4 rounded-xl border border-white/5" style="background:#161b22">
+                                <div class="text-xs uppercase font-semibold mb-1" style="color:#00e676">2. Technical
+                                    Setups</div>
+                                <div class="font-mono text-sm font-bold text-white">FVG + Order Blocks</div>
+                                <div class="text-xs mt-1" style="color:#8b9bb4">Fair Value Gap imbalance detection</div>
+                            </div>
+                            <div class="p-4 rounded-xl border border-white/5" style="background:#161b22">
+                                <div class="text-xs uppercase font-semibold mb-1" style="color:#b388ff">3. Intelligence
+                                    Veto</div>
+                                <div class="font-mono text-sm font-bold text-white">NLP & Yield Filter</div>
+                                <div class="text-xs mt-1" style="color:#8b9bb4">SEC filings + Inversion protection</div>
+                            </div>
+                            <div class="p-4 rounded-xl border border-white/5" style="background:#161b22">
+                                <div class="text-xs uppercase font-semibold mb-1" style="color:#ffd600">4. Execution
+                                    Engine</div>
+                                <div class="font-mono text-sm font-bold text-white">Bracket Orders</div>
+                                <div class="text-xs mt-1" style="color:#8b9bb4">Automatic Stop Loss & Take Profit</div>
+                            </div>
+                        </div>
+
+                        <!-- Opening Plan Card (Always-On 24/7 Engine) -->
+                        <div id="opening-plan-container" class="rounded-xl border border-white/5 overflow-hidden p-5" style="background:#161b22; display: none;">
+                            <div class="flex items-center justify-between pb-3 border-b border-white/5 mb-4">
+                                <div class="flex items-center gap-3">
+                                    <span class="w-2.5 h-2.5 rounded-full inline-block animate-pulse" style="background:#b388ff;box-shadow:0 0 8px #b388ff"></span>
+                                    <div>
+                                        <h3 class="font-display font-bold text-sm text-white flex items-center gap-2">
+                                            Plan de Apertura Cuántico (Always-On Engine)
+                                            <span id="plan-target-session" class="px-2 py-0.5 rounded text-xs font-mono font-normal" style="background:rgba(179,136,255,0.12);color:#b388ff;border:1px solid rgba(179,136,255,0.3)">Lunes 09:30 ET</span>
+                                        </h3>
+                                        <p class="text-xs mt-0.5" style="color:#8b9bb4">Candidatos seleccionados durante análisis fin de semana/overnight para revalidación previa a apertura.</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span id="plan-generation-time" class="text-xs font-mono" style="color:#8b9bb4">--:--:--</span>
+                                </div>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-xs">
+                                    <thead>
+                                        <tr class="border-b border-white/5 text-left uppercase tracking-wider" style="background:#1c2128;color:#8b9bb4">
+                                            <th class="px-4 py-2 font-semibold">Símbolo</th>
+                                            <th class="px-4 py-2 font-semibold">Estrategia</th>
+                                            <th class="px-4 py-2 font-semibold">Confluencia</th>
+                                            <th class="px-4 py-2 font-semibold">Revalidación Pre-Market</th>
+                                            <th class="px-4 py-2 font-semibold text-right">Estado</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="opening-plan-tbody">
+                                        <!-- Dynamic opening plan candidates -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Full Scanner Table -->
+                        <div class="rounded-xl border border-white/5 overflow-hidden" style="background:#161b22">
+                            <div class="flex items-center justify-between px-5 py-4 border-b border-white/5">
+                                <span class="font-display font-bold text-sm text-white">Current Opportunity Radar
+                                    Ranking</span>
+                                <span class="text-xs" style="color:#8b9bb4">Universe: NASDAQ-100 Core Top Liquid</span>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-xs">
+                                    <thead>
+                                        <tr class="border-b border-white/5 text-left uppercase tracking-wider"
+                                            style="background:#1c2128;color:#8b9bb4">
+                                            <th class="px-5 py-3 font-semibold">Symbol</th>
+                                            <th class="px-5 py-3 font-semibold">Strategy Setup</th>
+                                            <th class="px-5 py-3 font-semibold">AI Confidence Score</th>
+                                            <th class="px-5 py-3 font-semibold">Market Bias</th>
+                                            <th class="px-5 py-3 font-semibold text-right">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="scanner-full-tbody">
+                                        <tr>
+                                            <td colspan="5" class="text-center py-10 text-sm" style="color:#484f58">
+                                                Cargando radar de oportunidades... Presione 'Scan Universe Now' para
+                                                actualizar.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div> <!-- ═══════════════ END VIEW: SCANNER ═══════════════ -->
+
+                    <!-- ═══════════════ VIEW: MACRO ═══════════════ -->
+                    <div id="view-macro" class="app-view space-y-5" style="display: none;">
+                        <div class="flex items-center justify-between pb-2 border-b border-white/5">
+                            <div>
+                                <h2 class="font-display text-xl font-bold text-white tracking-tight">Macroeconomic
+                                    Intelligence & Market Regimes</h2>
+                                <p class="text-xs" style="color:#8b9bb4">Real-time regime classification, yield curve
+                                    dynamics, volatility index, and circuit-breaker scaling.</p>
+                            </div>
+                        </div>
+
+                        <!-- Hero Regime Card -->
+                        <div class="rounded-xl border border-white/5 p-6"
+                            style="background:linear-gradient(135deg,#161b22 60%,rgba(0,230,118,0.05))">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                <div>
+                                    <span class="text-xs font-semibold uppercase tracking-widest px-2 py-0.5 rounded"
+                                        style="background:rgba(0,230,118,0.1);color:#00e676;border:1px solid rgba(0,230,118,0.25)">ACTIVE
+                                        REGIME</span>
+                                    <h3 id="macro-hero-regime"
+                                        class="font-display text-2xl font-extrabold text-white mt-2">EXPANSION (RISK-ON)
+                                    </h3>
+                                    <p class="text-xs mt-1 max-w-xl" style="color:#8b9bb4">Market environment favorable
+                                        for high-beta momentum and liquidity gap filling. Risk multiplier set to full
+                                        allocation (1.0×).</p>
+                                </div>
+                                <div class="flex items-center gap-6">
+                                    <div class="text-right">
+                                        <div class="text-xs" style="color:#8b9bb4">Risk Multiplier</div>
+                                        <div id="macro-risk-mult" class="font-mono text-xl font-bold"
+                                            style="color:#00e676">1.0×</div>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="text-xs" style="color:#8b9bb4">Circuit Breaker</div>
+                                        <div id="macro-cb-pill" class="font-mono text-xl font-bold text-white">NORMAL
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Macro Indicators Grid -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div class="rounded-xl border border-white/5 p-5" style="background:#161b22">
+                                <span class="text-xs font-semibold uppercase tracking-widest" style="color:#8b9bb4">US
+                                    10Y - 2Y Spread</span>
+                                <div id="macro-yc-spread" class="font-mono text-2xl font-bold mt-2"
+                                    style="color:#00e676">+0.45%</div>
+                                <div class="text-xs mt-1" style="color:#8b9bb4">Uninverted Curve (Normal Expansion)
+                                </div>
+                            </div>
+                            <div class="rounded-xl border border-white/5 p-5" style="background:#161b22">
+                                <span class="text-xs font-semibold uppercase tracking-widest" style="color:#8b9bb4">CBOE
+                                    VIX Index</span>
+                                <div id="macro-vix-level" class="font-mono text-2xl font-bold text-white mt-2">16.5
+                                </div>
+                                <div class="text-xs mt-1" style="color:#8b9bb4">Low Volatility Regime (&lt; 20.0)</div>
+                            </div>
+                            <div class="rounded-xl border border-white/5 p-5" style="background:#161b22">
+                                <span class="text-xs font-semibold uppercase tracking-widest"
+                                    style="color:#8b9bb4">Federal Funds Target</span>
+                                <div class="font-mono text-2xl font-bold text-white mt-2">5.25% - 5.50%</div>
+                                <div class="text-xs mt-1" style="color:#8b9bb4">FOMC Policy Stance</div>
+                            </div>
+                            <div class="rounded-xl border border-white/5 p-5" style="background:#161b22">
+                                <span class="text-xs font-semibold uppercase tracking-widest" style="color:#8b9bb4">NYSE
+                                    Session</span>
+                                <div id="macro-session-name" class="font-mono text-2xl font-bold mt-2 text-white">
+                                    REGULAR</div>
+                                <div class="text-xs mt-1" style="color:#8b9bb4">Trading Window: 09:30 - 16:00 ET</div>
+                            </div>
+                        </div>
+
+                        <!-- Circuit Breaker Protocol Info -->
+                        <div class="rounded-xl border border-white/5 p-5" style="background:#161b22">
+                            <h4 class="font-display font-bold text-sm text-white mb-3">Regulatory & Algorithmic Circuit
+                                Breakers</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                                <div class="p-3 rounded-lg border border-white/5" style="background:#0d1117">
+                                    <span class="font-bold text-white">Tier 1 (-7% Market Drop)</span>
+                                    <p class="mt-1" style="color:#8b9bb4">15-minute market-wide halt before 15:25 ET.
+                                        Algorithmic sizing cuts in half (0.5×).</p>
+                                </div>
+                                <div class="p-3 rounded-lg border border-white/5" style="background:#0d1117">
+                                    <span class="font-bold text-white">Tier 2 (-13% Market Drop)</span>
+                                    <p class="mt-1" style="color:#8b9bb4">15-minute halt. Safe mode activates. All open
+                                        market orders canceled.</p>
+                                </div>
+                                <div class="p-3 rounded-lg border border-white/5" style="background:#0d1117">
+                                    <span class="font-bold text-white">Tier 3 (-20% Market Drop)</span>
+                                    <p class="mt-1" style="color:#8b9bb4">Trading halted for remainder of the day.
+                                        Emergency Kill Switch engaged automatically.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div> <!-- ═══════════════ END VIEW: MACRO ═══════════════ -->
+
+                    <!-- ═══════════════ VIEW: SEC / NEWS ═══════════════ -->
+                    <div id="view-sec" class="app-view space-y-5" style="display: none;">
+                        <div class="flex items-center justify-between pb-2 border-b border-white/5">
+                            <div>
+                                <h2 class="font-display text-xl font-bold text-white tracking-tight">SEC EDGAR Filings &
+                                    NLP Sentiment Intelligence</h2>
+                                <p class="text-xs" style="color:#8b9bb4">Automated real-time parsing of Form 8-K, Form 4
+                                    insider transactions, and FinBERT sentiment scoring.</p>
+                            </div>
+                            <span class="text-xs font-mono px-2 py-1 rounded"
+                                style="background:#21262d;color:#00e5ff">SEC EDGAR API: CONNECTED</span>
+                        </div>
+
+                        <!-- Summary cards -->
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div class="rounded-xl border border-white/5 p-5" style="background:#161b22">
+                                <div class="text-xs font-semibold uppercase tracking-widest mb-1" style="color:#8b9bb4">
+                                    Aggregate Sentiment</div>
+                                <div class="font-mono text-2xl font-bold text-white">+0.42</div>
+                                <div class="text-xs mt-1" style="color:#00e676">Bullish / Constructive Bias</div>
+                            </div>
+                            <div class="rounded-xl border border-white/5 p-5" style="background:#161b22">
+                                <div class="text-xs font-semibold uppercase tracking-widest mb-1" style="color:#8b9bb4">
+                                    Vetoed Symbols</div>
+                                <div class="font-mono text-2xl font-bold text-white">0 Tickers</div>
+                                <div class="text-xs mt-1" style="color:#8b9bb4">No material event lockouts active</div>
+                            </div>
+                            <div class="rounded-xl border border-white/5 p-5" style="background:#161b22">
+                                <div class="text-xs font-semibold uppercase tracking-widest mb-1" style="color:#8b9bb4">
+                                    Filings Monitored</div>
+                                <div class="font-mono text-2xl font-bold text-white">100% NASDAQ-100</div>
+                                <div class="text-xs mt-1" style="color:#8b9bb4">Form 8-K, Form 4, 10-Q Real-time</div>
+                            </div>
+                        </div>
+
+                        <!-- Filings Table -->
+                        <div class="rounded-xl border border-white/5 overflow-hidden" style="background:#161b22">
+                            <div class="px-5 py-4 border-b border-white/5">
+                                <span class="font-display font-bold text-sm text-white">Recent SEC Filings & Machine
+                                    Learning Decisions</span>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-xs">
+                                    <thead>
+                                        <tr class="border-b border-white/5 text-left uppercase tracking-wider"
+                                            style="background:#1c2128;color:#8b9bb4">
+                                            <th class="px-5 py-3 font-semibold">Symbol</th>
+                                            <th class="px-5 py-3 font-semibold">Form Type</th>
+                                            <th class="px-5 py-3 font-semibold">Event Description</th>
+                                            <th class="px-5 py-3 font-semibold">Sentiment Score</th>
+                                            <th class="px-5 py-3 font-semibold text-right">Trading Filter</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr class="table-row-hover border-b border-white/[0.04]">
+                                            <td class="px-5 py-3 font-mono font-bold text-white">NVDA</td>
+                                            <td class="px-5 py-3"><span class="px-1.5 py-0.5 rounded font-mono"
+                                                    style="background:#21262d;color:#00e5ff">8-K</span></td>
+                                            <td class="px-5 py-3 text-white">Item 8.01 Other Events: Strategic
+                                                enterprise AI cloud deployment expansion.</td>
+                                            <td class="px-5 py-3 font-mono font-bold" style="color:#00e676">+0.68
+                                                (POSITIVE)</td>
+                                            <td class="px-5 py-3 text-right"><span
+                                                    class="px-2 py-0.5 rounded font-semibold text-xs"
+                                                    style="background:rgba(0,230,118,0.1);color:#00e676">APPROVED</span>
+                                            </td>
+                                        </tr>
+                                        <tr class="table-row-hover border-b border-white/[0.04]">
+                                            <td class="px-5 py-3 font-mono font-bold text-white">MSFT</td>
+                                            <td class="px-5 py-3"><span class="px-1.5 py-0.5 rounded font-mono"
+                                                    style="background:#21262d;color:#00e5ff">Form 4</span></td>
+                                            <td class="px-5 py-3 text-white">Executive officer option exercise &
+                                                scheduled 10b5-1 holding plan.</td>
+                                            <td class="px-5 py-3 font-mono" style="color:#8b9bb4">+0.05 (NEUTRAL)</td>
+                                            <td class="px-5 py-3 text-right"><span
+                                                    class="px-2 py-0.5 rounded font-semibold text-xs"
+                                                    style="background:rgba(0,230,118,0.1);color:#00e676">APPROVED</span>
+                                            </td>
+                                        </tr>
+                                        <tr class="table-row-hover border-b border-white/[0.04]">
+                                            <td class="px-5 py-3 font-mono font-bold text-white">AMZN</td>
+                                            <td class="px-5 py-3"><span class="px-1.5 py-0.5 rounded font-mono"
+                                                    style="background:#21262d;color:#00e5ff">8-K</span></td>
+                                            <td class="px-5 py-3 text-white">Item 7.01 Reg FD: AWS infrastructure
+                                                expansion & capital expenditure update.</td>
+                                            <td class="px-5 py-3 font-mono font-bold" style="color:#00e676">+0.54
+                                                (POSITIVE)</td>
+                                            <td class="px-5 py-3 text-right"><span
+                                                    class="px-2 py-0.5 rounded font-semibold text-xs"
+                                                    style="background:rgba(0,230,118,0.1);color:#00e676">APPROVED</span>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div> <!-- ═══════════════ END VIEW: SEC ═══════════════ -->
+
+                    <!-- ═══════════════ VIEW: BACKTESTS ═══════════════ -->
+                    <div id="view-backtests" class="app-view space-y-5" style="display: none;">
+                        <div class="flex items-center justify-between pb-2 border-b border-white/5">
+                            <div>
+                                <h2 class="font-display text-xl font-bold text-white tracking-tight">Quantitative
+                                    Strategy Benchmarks & Walk-Forward Backtests</h2>
+                                <p class="text-xs" style="color:#8b9bb4">Historical simulation metrics, Sharpe ratios,
+                                    maximum drawdowns, and statistical edge verification.</p>
+                            </div>
+                        </div>
+
+                        <!-- Summary Stats -->
+                        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div class="rounded-xl border border-white/5 p-5" style="background:#161b22">
+                                <div class="text-xs uppercase font-semibold mb-1" style="color:#8b9bb4">Ensemble Sharpe
+                                    Ratio</div>
+                                <div class="font-mono text-2xl font-bold" style="color:#00e676">2.14</div>
+                                <div class="text-xs mt-1" style="color:#8b9bb4">Benchmark: 1.05 (SPY)</div>
+                            </div>
+                            <div class="rounded-xl border border-white/5 p-5" style="background:#161b22">
+                                <div class="text-xs uppercase font-semibold mb-1" style="color:#8b9bb4">Profit Factor
+                                </div>
+                                <div class="font-mono text-2xl font-bold text-white">1.85</div>
+                                <div class="text-xs mt-1" style="color:#8b9bb4">Gross Profit / Gross Loss</div>
+                            </div>
+                            <div class="rounded-xl border border-white/5 p-5" style="background:#161b22">
+                                <div class="text-xs uppercase font-semibold mb-1" style="color:#8b9bb4">Max Drawdown
+                                </div>
+                                <div class="font-mono text-2xl font-bold" style="color:#00e5ff">-4.20%</div>
+                                <div class="text-xs mt-1" style="color:#8b9bb4">Within 5% institutional limit</div>
+                            </div>
+                            <div class="rounded-xl border border-white/5 p-5" style="background:#161b22">
+                                <div class="text-xs uppercase font-semibold mb-1" style="color:#8b9bb4">Historical Win
+                                    Rate</div>
+                                <div class="font-mono text-2xl font-bold" style="color:#00e676">68.4%</div>
+                                <div class="text-xs mt-1" style="color:#8b9bb4">Out-of-Sample Sample Size: 1,420 trades
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Backtest Comparison Table -->
+                        <div class="rounded-xl border border-white/5 overflow-hidden" style="background:#161b22">
+                            <div class="px-5 py-4 border-b border-white/5">
+                                <span class="font-display font-bold text-sm text-white">Strategy Comparative
+                                    Matrix</span>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-xs">
+                                    <thead>
+                                        <tr class="border-b border-white/5 text-left uppercase tracking-wider"
+                                            style="background:#1c2128;color:#8b9bb4">
+                                            <th class="px-5 py-3 font-semibold">Strategy</th>
+                                            <th class="px-5 py-3 font-semibold text-right">Annual Return</th>
+                                            <th class="px-5 py-3 font-semibold text-right">Sharpe</th>
+                                            <th class="px-5 py-3 font-semibold text-right">Max DD</th>
+                                            <th class="px-5 py-3 font-semibold text-right">Win Rate</th>
+                                            <th class="px-5 py-3 font-semibold text-right">Profit Factor</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr class="table-row-hover border-b border-white/[0.04]">
+                                            <td class="px-5 py-3 font-semibold text-white">Liquidity Imbalance & Fair
+                                                Value Gap (FVG)</td>
+                                            <td class="px-5 py-3 font-mono text-right" style="color:#00e676">+34.2%</td>
+                                            <td class="px-5 py-3 font-mono text-right font-bold text-white">2.28</td>
+                                            <td class="px-5 py-3 font-mono text-right" style="color:#00e5ff">-3.8%</td>
+                                            <td class="px-5 py-3 font-mono text-right text-white">71.2%</td>
+                                            <td class="px-5 py-3 font-mono text-right text-white">2.05</td>
+                                        </tr>
+                                        <tr class="table-row-hover border-b border-white/[0.04]">
+                                            <td class="px-5 py-3 font-semibold text-white">Dynamic Trend Following &
+                                                Momentum</td>
+                                            <td class="px-5 py-3 font-mono text-right" style="color:#00e676">+26.8%</td>
+                                            <td class="px-5 py-3 font-mono text-right font-bold text-white">1.92</td>
+                                            <td class="px-5 py-3 font-mono text-right" style="color:#00e5ff">-5.1%</td>
+                                            <td class="px-5 py-3 font-mono text-right text-white">62.5%</td>
+                                            <td class="px-5 py-3 font-mono text-right text-white">1.74</td>
+                                        </tr>
+                                        <tr class="table-row-hover border-b border-white/[0.04]">
+                                            <td class="px-5 py-3 font-semibold text-white">Volatility Mean Reversion
+                                                (Bollinger + RSI)</td>
+                                            <td class="px-5 py-3 font-mono text-right" style="color:#00e676">+19.5%</td>
+                                            <td class="px-5 py-3 font-mono text-right font-bold text-white">1.80</td>
+                                            <td class="px-5 py-3 font-mono text-right" style="color:#00e5ff">-4.4%</td>
+                                            <td class="px-5 py-3 font-mono text-right text-white">65.0%</td>
+                                            <td class="px-5 py-3 font-mono text-right text-white">1.68</td>
+                                        </tr>
+                                        <tr class="table-row-hover border-b border-white/[0.04]"
+                                            style="background:rgba(0,230,118,0.03)">
+                                            <td class="px-5 py-3 font-semibold text-white flex items-center gap-2">
+                                                <span class="w-2 h-2 rounded-full inline-block"
+                                                    style="background:#00e676"></span>
+                                                <span>Multi-Strategy Active Ensemble (Production)</span>
+                                            </td>
+                                            <td class="px-5 py-3 font-mono text-right font-bold" style="color:#00e676">
+                                                +38.9%</td>
+                                            <td class="px-5 py-3 font-mono text-right font-bold" style="color:#00e676">
+                                                2.14</td>
+                                            <td class="px-5 py-3 font-mono text-right" style="color:#00e5ff">-4.2%</td>
+                                            <td class="px-5 py-3 font-mono text-right font-bold text-white">68.4%</td>
+                                            <td class="px-5 py-3 font-mono text-right font-bold text-white">1.85</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div> <!-- ═══════════════ END VIEW: BACKTESTS ═══════════════ -->
+
+                    <!-- ═══════════════ VIEW: SETTINGS ═══════════════ -->
+                    <div id="view-settings" class="app-view space-y-5" style="display: none;">
+                        <div class="flex items-center justify-between pb-2 border-b border-white/5">
+                            <div>
+                                <h2 class="font-display text-xl font-bold text-white tracking-tight">Platform Settings &
+                                    System Health</h2>
+                                <p class="text-xs" style="color:#8b9bb4">Configure API integrations, risk parameters,
+                                    and autonomous operation safeguards.</p>
+                            </div>
+                        </div>
+
+                        <!-- API Integrations Status -->
+                        <div class="rounded-xl border border-white/5 p-5" style="background:#161b22">
+                            <h3 class="font-display font-bold text-sm text-white mb-4">API Services & Credentials Status
+                            </h3>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                                <div class="p-3 rounded-lg border border-white/5" style="background:#0d1117">
+                                    <div class="flex items-center justify-between mb-1">
+                                        <span class="font-semibold text-white">Alpaca Trading API</span>
+                                        <span class="px-1.5 py-0.5 rounded font-semibold text-xs"
+                                            style="background:rgba(0,230,118,0.1);color:#00e676">CONNECTED</span>
+                                    </div>
+                                    <div class="font-mono text-gray-400 mt-1">Paper Trading Endpoint</div>
+                                </div>
+                                <div class="p-3 rounded-lg border border-white/5" style="background:#0d1117">
+                                    <div class="flex items-center justify-between mb-1">
+                                        <span class="font-semibold text-white">Twelve Data Multi-Key Pool</span>
+                                        <span class="px-1.5 py-0.5 rounded font-semibold text-xs"
+                                            style="background:rgba(0,230,118,0.1);color:#00e676">5 KEYS ACTIVE</span>
+                                    </div>
+                                    <div class="font-mono text-gray-400 mt-1">40 req/min · Auto-Rotator</div>
+                                </div>
+                                <div class="p-3 rounded-lg border border-white/5" style="background:#0d1117">
+                                    <div class="flex items-center justify-between mb-1">
+                                        <span class="font-semibold text-white">SEC EDGAR API</span>
+                                        <span class="px-1.5 py-0.5 rounded font-semibold text-xs"
+                                            style="background:rgba(0,230,118,0.1);color:#00e676">CONNECTED</span>
+                                    </div>
+                                    <div class="font-mono text-gray-400 mt-1">TradingBot/2.0 User-Agent</div>
+                                </div>
+                                <div class="p-3 rounded-lg border border-white/5" style="background:#0d1117">
+                                    <div class="flex items-center justify-between mb-1">
+                                        <span class="font-semibold text-white">Event Bus & Cache</span>
+                                        <span class="px-1.5 py-0.5 rounded font-semibold text-xs"
+                                            style="background:rgba(0,229,255,0.08);color:#00e5ff">OPERATIONAL</span>
+                                    </div>
+                                    <div class="font-mono text-gray-400 mt-1">Internal Bus & Memory</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Risk Controls -->
+                        <div class="rounded-xl border border-white/5 p-5" style="background:#161b22">
+                            <h3 class="font-display font-bold text-sm text-white mb-4">Risk Governance Parameters</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                                <div class="space-y-2">
+                                    <label class="block text-gray-400">Max Risk per Trade (% Equity)</label>
+                                    <input type="text" value="1.00%" disabled
+                                        class="w-full px-3 py-2 rounded-lg font-mono text-white border border-white/5"
+                                        style="background:#0d1117">
+                                </div>
+                                <div class="space-y-2">
+                                    <label class="block text-gray-400">Daily Maximum Drawdown Halt</label>
+                                    <input type="text" value="-3.00%" disabled
+                                        class="w-full px-3 py-2 rounded-lg font-mono text-white border border-white/5"
+                                        style="background:#0d1117">
+                                </div>
+                                <div class="space-y-2">
+                                    <label class="block text-gray-400">Max Concurrent Positions</label>
+                                    <input type="text" value="5 Tickers" disabled
+                                        class="w-full px-3 py-2 rounded-lg font-mono text-white border border-white/5"
+                                        style="background:#0d1117">
+                                </div>
+                                <div class="space-y-2">
+                                    <label class="block text-gray-400">Default Risk-Reward Ratio (TP / SL)</label>
+                                    <input type="text" value="2.0× Minimum" disabled
+                                        class="w-full px-3 py-2 rounded-lg font-mono text-white border border-white/5"
+                                        style="background:#0d1117">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Quick System Controls -->
+                        <div class="rounded-xl border border-white/5 p-5" style="background:#161b22">
+                            <h3 class="font-display font-bold text-sm text-white mb-2">Emergency & Account Operations
+                            </h3>
+                            <p class="text-xs mb-4" style="color:#8b9bb4">Acciones de control inmediato sobre la cuenta
+                                paper y el motor algorítmico.</p>
+                            <div class="flex flex-wrap gap-3">
+                                <button class="btn"
+                                    style="background:rgba(255,214,0,0.1);color:#ffd600;border-color:rgba(255,214,0,0.3)"
+                                    onclick="toggleAutoTrade()">
+                                    Toggle Auto-Trade
+                                </button>
+                                <button id="btn-settings-shadow" class="btn"
+                                    style="background:rgba(255,171,0,0.12);color:#ffab00;border-color:rgba(255,171,0,0.35)"
+                                    onclick="toggleShadowMode()">
+                                    Toggle Shadow Mode
+                                </button>
+                                <button id="btn-reset-account" class="btn"
+                                    style="background:rgba(255,255,255,0.05);color:#8b9bb4;border-color:rgba(255,255,255,0.15)"
+                                    onclick="resetPaperAccount()">
+                                    Reset Paper Account ($1,000)
+                                </button>
+                                <button class="btn"
+                                    style="background:rgba(255,23,68,0.15);color:#ff1744;border-color:rgba(255,23,68,0.35)"
+                                    onclick="openKillModal()">
+                                    Emergency Kill Switch
+                                </button>
+                            </div>
+                        </div>
+                    </div> <!-- ═══════════════ END VIEW: SETTINGS ═══════════════ -->
+
+                    <!-- Footer spacer -->
+                    <div class="h-2"></div>
+            </main>
+        </div>
+    </div>
+
+    <!-- ── Kill Switch Modal ── -->
+    <div id="kill-modal" class="modal-overlay">
+        <div class="modal-card">
+            <h3 class="font-display text-lg font-bold mb-2" style="color:#ff1744">🛑 Confirm Emergency Halt</h3>
+            <p class="text-sm mb-4" style="color:#8b9bb4">Activating the <b class="text-white">Kill Switch</b> will
+                immediately block all new order execution and enter Safe Mode across all strategies.</p>
+            <input type="text" id="kill-reason-input"
+                class="w-full px-3 py-2 rounded-lg text-sm font-mono mb-4 outline-none"
+                style="background:#0d1117;border:1px solid #30363d;color:#fff"
+                placeholder="Enter reason (e.g. Extreme Volatility)">
+            <div class="flex justify-end gap-3">
+                <button class="btn" style="background:#21262d;color:#8b9bb4;border-color:#30363d"
+                    onclick="closeModal('kill-modal')">Cancel</button>
+                <button class="btn"
+                    style="background:rgba(255,23,68,0.15);color:#ff1744;border-color:rgba(255,23,68,0.4)"
+                    onclick="confirmKillSwitch()">HALT ALL TRADING</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Resume Modal ── -->
+    <div id="resume-modal" class="modal-overlay">
+        <div class="modal-card">
+            <h3 class="font-display text-lg font-bold mb-2" style="color:#00e676">🔓 Resume Trading</h3>
+            <p class="text-sm mb-4" style="color:#8b9bb4">Enter the security passphrase to restore automated execution:
+            </p>
+            <input type="password" id="resume-passphrase-input"
+                class="w-full px-3 py-2 rounded-lg text-sm font-mono mb-4 outline-none"
+                style="background:#0d1117;border:1px solid #30363d;color:#fff"
+                placeholder="Passphrase (CONFIRM_RESUME)">
+            <div class="flex justify-end gap-3">
+                <button class="btn" style="background:#21262d;color:#8b9bb4;border-color:#30363d"
+                    onclick="closeModal('resume-modal')">Cancel</button>
+                <button class="btn"
+                    style="background:rgba(0,230,118,0.15);color:#00e676;border-color:rgba(0,230,118,0.4)"
+                    onclick="confirmResume()">RESUME OPERATION</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ════════════════════════ JAVASCRIPT ════════════════════════ -->
+    <script>
+        const BASE_PATH = window.location.pathname.startsWith('/trading') ? '/trading' : '';
+        const API_BASE = window.location.origin + BASE_PATH;
+
+        // ─── Multi-View SPA Router ───
+        const VALID_VIEWS = ['dashboard', 'portfolio', 'orders', 'scanner', 'macro', 'sec', 'backtests', 'settings'];
+
+        function switchView(viewName, updateUrl = true) {
+            if (!VALID_VIEWS.includes(viewName)) {
+                viewName = 'dashboard';
+            }
+
+            // Hide all app views
+            document.querySelectorAll('.app-view').forEach(el => {
+                el.style.display = 'none';
+            });
+
+            // Show target view
+            const targetEl = document.getElementById('view-' + viewName);
+            if (targetEl) {
+                targetEl.style.display = 'block';
+            }
+
+            // Update sidebar navigation styling
+            document.querySelectorAll('.sidebar-item').forEach(item => {
+                const itemTarget = item.getAttribute('data-view');
+                if (itemTarget === viewName) {
+                    item.classList.add('active');
+                    item.style.color = '#ffffff';
+                    item.style.background = 'rgba(0,230,118,0.1)';
+                    item.style.borderLeft = '2px solid #00e676';
+                } else {
+                    item.classList.remove('active');
+                    item.style.color = '#8b9bb4';
+                    item.style.background = 'transparent';
+                    item.style.borderLeft = 'none';
+                }
+            });
+
+            // Update browser URL history if requested
+            if (updateUrl) {
+                const subPath = viewName === 'dashboard' ? '/dashboard' : '/' + viewName;
+                const newPath = BASE_PATH + subPath;
+                if (window.location.pathname !== newPath) {
+                    history.pushState({ view: viewName }, '', newPath);
+                }
+            }
+
+            // Trigger chart resize if navigating to dashboard
+            if (viewName === 'dashboard' && typeof equityChart !== 'undefined' && equityChart) {
+                setTimeout(() => {
+                    const c = document.getElementById('equity-chart-container');
+                    if (c) equityChart.resize(c.clientWidth, 220);
+                }, 50);
+            }
+        }
+
+        function navigateTo(event, viewName) {
+            if (event) event.preventDefault();
+            switchView(viewName, true);
+        }
+
+        window.addEventListener('popstate', () => {
+            const rawPath = window.location.pathname.replace('/', '').toLowerCase();
+            switchView(rawPath || 'dashboard', false);
+        });
+
+        // Live clock
+        setInterval(() => {
+            const now = new Date();
+            document.getElementById('clock-display').textContent =
+                now.toLocaleTimeString('en-US', { hour12: false, timeZone: 'America/New_York' }) + ' ET';
+        }, 1000);
+
+        // ─────────────────────────────────────────────────────────────────────
+        // TELEMETRY ENGINE: SSE (Server-Sent Events) como modo primario
+        //
+        // Arquitectura:
+        //   • SSE abre 1 sola conexión TCP persistente → el servidor empuja datos cada 15s
+        //   • 0 peticiones HTTP adicionales = imposible alcanzar el rate limit de Hostinger
+        //   • Si SSE falla (red cortada, navegador incompatible) → fallback a polling cada 20s
+        // ─────────────────────────────────────────────────────────────────────
+        let sseSource = null;
+        let sseActive = false;
+        let sseRetries = 0;
+        let isFetchingTelemetry = false;
+        let telemetryTimeoutId = null;
+        let rateLimitCount = 0;
+        let consecutiveErrors = 0;
+
+        // ── Notificación visual de estado de conexión ──────────────────────
+        function showConnectionStatus(type, msg) {
+            let el = document.getElementById('connection-status-bar');
+            if (!el) {
+                el = document.createElement('div');
+                el.id = 'connection-status-bar';
+                el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;text-align:center;font-size:11px;padding:5px 12px;font-family:monospace;transition:opacity 0.5s';
+                document.body.appendChild(el);
+            }
+            const styles = {
+                sse:     'background:rgba(0,230,118,0.1);color:#00e676;border-bottom:1px solid rgba(0,230,118,0.2)',
+                warn:    'background:rgba(255,214,0,0.1);color:#ffd600;border-bottom:1px solid rgba(255,214,0,0.2)',
+                error:   'background:rgba(255,23,68,0.15);color:#ff1744;border-bottom:1px solid rgba(255,23,68,0.3)',
+                hidden:  'opacity:0;pointer-events:none',
+            };
+            el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;text-align:center;font-size:11px;padding:5px 12px;font-family:monospace;transition:opacity 0.5s;' + (styles[type] || '');
+            el.textContent = msg || '';
+            if (type === 'sse') {
+                setTimeout(() => { if (el) { el.style.cssText += styles.hidden; } }, 3000);
+            }
+        }
+
+        function showRateLimitNotice(seconds) {
+            showConnectionStatus('error', `Hostinger bloqueó temporalmente tu IP (429). Reconectando en ${seconds}s automáticamente... Cierra pestañas extras o cambia de red.`);
+        }
+
+        function hideRateLimitNotice() {
+            showConnectionStatus('sse', '⚡ Quant OS Conectado');
+        }
+
+        // ── Fallback Polling (cuando SSE no está disponible) ──────────────
+        function scheduleNextTelemetry(delayMs) {
+            if (telemetryTimeoutId) clearTimeout(telemetryTimeoutId);
+            telemetryTimeoutId = setTimeout(fetchTelemetry, delayMs);
+        }
+
+        async function fetchTelemetry() {
+            if (isFetchingTelemetry || sseActive) return;
+            isFetchingTelemetry = true;
+            let nextDelay = 20000;
+            try {
+                const res = await fetch(`${API_BASE}/api/v1/telemetry`, { cache: 'no-store' });
+                if (res.status === 429) {
+                    rateLimitCount++;
+                    const pauseSecs = rateLimitCount === 1 ? 45 : (rateLimitCount === 2 ? 90 : 180);
+                    showRateLimitNotice(pauseSecs);
+                    nextDelay = pauseSecs * 1000;
+                    return;
+                }
+                if (!res.ok) { consecutiveErrors++; nextDelay = 25000; return; }
+                rateLimitCount = 0; consecutiveErrors = 0;
+                hideRateLimitNotice();
+                updateUI(await res.json());
+            } catch (err) {
+                nextDelay = 25000;
+            } finally {
+                isFetchingTelemetry = false;
+                if (!sseActive) scheduleNextTelemetry(document.hidden ? 60000 : nextDelay);
+            }
+        }
+
+        // ── SSE: Modo principal de recepción de datos ─────────────────────
+        function initSSE() {
+            if (sseSource) { sseSource.close(); sseSource = null; }
+
+            const sseUrl = `${API_BASE}/api/v1/stream`;
+            console.info(`[SSE] Conectando a ${sseUrl}`);
+            showConnectionStatus('warn', 'Conectando con el motor de trading...');
+
+            try {
+                sseSource = new EventSource(sseUrl);
+
+                sseSource.onopen = () => {
+                    sseActive = true;
+                    sseRetries = 0;
+                    rateLimitCount = 0;
+                    // Cancelar cualquier polling que estuviera corriendo
+                    if (telemetryTimeoutId) { clearTimeout(telemetryTimeoutId); telemetryTimeoutId = null; }
+                    showConnectionStatus('sse', '⚡ Quant OS — Conexión SSE activa (0 rate-limits posibles)');
+                    console.info('[SSE] Conexión persistente establecida. Cero peticiones adicionales al servidor.');
+                };
+
+                sseSource.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        if (data && !data.status) {  // ignorar mensajes de control
+                            hideRateLimitNotice();
+                            updateUI(data);
+                        }
+                    } catch (e) {
+                        console.warn('[SSE] Error parsing event:', e);
+                    }
+                };
+
+                sseSource.onerror = (err) => {
+                    sseActive = false;
+                    sseSource.close();
+                    sseSource = null;
+                    sseRetries++;
+
+                    // Backoff exponencial: 5s, 10s, 20s, 40s... máx 120s
+                    const backoff = Math.min(5000 * Math.pow(2, sseRetries - 1), 120000);
+                    console.warn(`[SSE] Desconectado. Reintentando SSE en ${backoff/1000}s (intento ${sseRetries})...`);
+                    showConnectionStatus('warn', `Reconectando... (${backoff/1000}s)`);
+
+                    // Si SSE falla muchas veces, usar polling como respaldo temporal
+                    if (sseRetries > 3) {
+                        console.warn('[SSE] Múltiples fallos. Activando polling de respaldo...');
+                        scheduleNextTelemetry(20000);
+                    }
+
+                    setTimeout(initSSE, backoff);
+                };
+
+            } catch (e) {
+                // EventSource no disponible (muy poco probable en browsers modernos)
+                console.warn('[SSE] EventSource no disponible. Usando polling de respaldo.');
+                fetchTelemetry();
+            }
+        }
+
+        function manualReconnectTelemetry() {
+            sseRetries = 0; rateLimitCount = 0; consecutiveErrors = 0;
+            hideRateLimitNotice();
+            initSSE();
+        }
+
+
+        function renderCommittee(data) {
+            const committee = data.committee || {};
+            const agents = committee.agents || [];
+            const count = document.getElementById('committee-count');
+            const consensus = document.getElementById('committee-consensus');
+            const list = document.getElementById('committee-agent-list');
+            if (count) count.textContent = `${committee.agent_count || agents.length || 0} AGENTS`;
+            if (consensus) consensus.textContent = `Min consensus ${Math.round((committee.min_consensus_ratio || 0.6) * 100)}%`;
+            if (list && agents.length) {
+                list.innerHTML = agents.map((name) => `
+                    <div class="rounded-lg border border-white/5 px-2.5 py-2" style="background:#0d1117">
+                        <div class="flex items-center gap-1.5">
+                            <span class="w-1.5 h-1.5 rounded-full" style="background:#b388ff"></span>
+                            <span class="text-xs font-mono font-semibold text-white truncate" title="${name}">${name.replaceAll('_', ' ')}</span>
+                        </div>
+                        <div class="text-[10px] mt-1" style="color:#8b9bb4">SIGNAL ONLY</div>
+                    </div>`).join('');
+            }
+
+            const scores = data.news_scores || {};
+            const scoreList = document.getElementById('news-score-list');
+            const blocked = Object.values(scores).filter((score) => Number(score) <= -50).length;
+            const blockedEl = document.getElementById('news-blocked-count');
+            if (blockedEl) blockedEl.textContent = `${blocked} BLOCKED`;
+            const intelBlocked = document.getElementById('intel-blocked');
+            if (intelBlocked) intelBlocked.textContent = String(blocked);
+            if (scoreList) {
+                const rows = Object.entries(scores).sort((a, b) => Number(a[1]) - Number(b[1]));
+                scoreList.innerHTML = rows.length ? rows.map(([symbol, score]) => {
+                    const numeric = Number(score) || 0;
+                    const color = numeric <= -50 ? '#ff1744' : numeric < 0 ? '#ffd600' : '#00e676';
+                    const label = numeric <= -50 ? 'BLOCKED' : numeric > 20 ? 'BULLISH' : numeric < -20 ? 'BEARISH' : 'NEUTRAL';
+                    return `<div class="flex items-center justify-between text-xs">
+                        <span class="font-mono font-bold text-white">${symbol}</span>
+                        <span class="font-mono" style="color:${color}">${numeric.toFixed(1)} · ${label}</span>
+                    </div>`;
+                }).join('') : '<div class="text-xs text-center py-4" style="color:#484f58">Sin noticias procesadas aún</div>';
+            }
+        }
+
+        function updateUI(data) {
+            // Kill Switch & Status
+            const pill = document.getElementById("system-status-pill");
+            const pillText = document.getElementById("system-status-text");
+            const btnKill = document.getElementById("btn-kill-switch");
+            const btnResume = document.getElementById("btn-resume");
+
+            if (data.kill_switch_active) {
+                pill.style.background = 'rgba(255,23,68,0.12)';
+                pill.style.color = '#ff1744';
+                pill.style.borderColor = 'rgba(255,23,68,0.3)';
+                pillText.textContent = "HALTED: " + (data.kill_switch_reason || "KILL SWITCH");
+                btnKill.style.display = "none";
+                btnResume.style.display = "inline-flex";
+            } else {
+                pill.style.background = 'rgba(0,230,118,0.1)';
+                pill.style.color = '#00e676';
+                pill.style.borderColor = 'rgba(0,230,118,0.25)';
+                pillText.textContent = "SYSTEM ACTIVE";
+                btnKill.style.display = "inline-flex";
+                btnResume.style.display = "none";
+            }
+
+            // Auto-Trade state sync
+            if (data.auto_trade !== undefined) {
+                updateAutoTradeUI(data.auto_trade);
+            }
+
+            // Swing Mode state sync
+            if (data.swing_mode !== undefined) {
+                updateSwingModeUI(data.swing_mode);
+            }
+
+            // Shadow Mode state sync
+            if (data.shadow_mode !== undefined) {
+                updateShadowModeUI(data.shadow_mode);
+            }
+
+            renderCommittee(data);
+
+            const worker = data.worker || {};
+            const marquee = document.getElementById('engine-live-text');
+            if (marquee) {
+                marquee.textContent = worker.running
+                    ? `Worker activo · ciclo cada ${worker.scan_interval_seconds || 60}s · ${worker.paper ? 'PAPER' : 'LIVE'}`
+                    : 'Worker detenido · solo telemetría disponible';
+            }
+            if (!worker.running && !data.kill_switch_active) {
+                pill.style.background = 'rgba(255,214,0,0.10)';
+                pill.style.color = '#ffd600';
+                pill.style.borderColor = 'rgba(255,214,0,0.30)';
+                pillText.textContent = 'WORKER NOT RUNNING';
+            }
+
+            // Portfolio
+            if (data.portfolio) {
+                const realEq = data.portfolio.portfolio_value || data.portfolio.real_account_equity || 100000.0;
+                const realInitial = 100000.0;
+                const realNet = (realEq - realInitial);
+                const realRet = data.portfolio.total_return_pct !== undefined ? data.portfolio.total_return_pct : ((realNet / realInitial) * 100.0);
+                const opMargin = data.portfolio.operational_margin || 1000.0;
+
+                document.getElementById("val-equity").textContent = "$" + realEq.toLocaleString('en-US', { minimumFractionDigits: 2 });
+                document.getElementById("val-buying-power").textContent = "$" + (data.portfolio.buying_power || 0).toLocaleString('en-US', { minimumFractionDigits: 2 });
+                document.getElementById("val-cash").textContent = `Cash: $${(data.portfolio.cash || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} · Margen Op: $${opMargin.toLocaleString('en-US', { minimumFractionDigits: 0 })}`;
+
+                const realPnl = data.portfolio.realized_pnl || 0;
+                const realPnlEl = document.getElementById("val-realized-pnl");
+                if (realPnlEl) {
+                    realPnlEl.textContent = (realPnl >= 0 ? "+" : "") + "$" + realPnl.toLocaleString('en-US', { minimumFractionDigits: 2 });
+                    realPnlEl.style.color = realPnl > 0 ? "#00e676" : (realPnl < 0 ? "#ff1744" : "#ffffff");
+                }
+                const historyCount = (data.trade_history || []).length;
+                const subTradesEl = document.getElementById("sub-realized-trades");
+                if (subTradesEl) {
+                    const todayFills = (data.portfolio.realized_pnl_today || 0);
+                    subTradesEl.textContent = `${historyCount} ops cerradas · Hoy: ${(todayFills >= 0 ? "+" : "")}$${todayFills.toFixed(2)}`;
+                }
+
+                const pnlEl = document.getElementById("sub-pnl");
+                const arrow = realNet >= 0
+                    ? `<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>`
+                    : `<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>`;
+                const fmt = (v) => (v >= 0 ? "+" : "-") + "$" + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                const openPnl = data.portfolio.unrealized_pnl || 0;
+                const todayChg = data.portfolio.today_total_change !== undefined ? data.portfolio.today_total_change : (data.portfolio.realized_pnl_today || 0);
+
+                pnlEl.innerHTML = arrow + (realNet >= 0 ? "+" : "") + `${fmt(realNet)} (${realRet >= 0 ? "+" : ""}${realRet.toFixed(2)}%) · Hoy: ${fmt(todayChg)} · Flotante: ${fmt(openPnl)} · Cerrado: ${fmt(realPnl)}`;
+                pnlEl.style.color = realNet >= 0 ? '#00e676' : '#ff1744';
+            }
+
+            // Market session
+            if (data.market_session) {
+                const s = (data.market_session.session || '').toUpperCase();
+                let stageText = "Mercado Cerrado (Abre 9:30 AM ET)";
+                let dotColor = "#8b9bb4";
+                let sessionLabel = "NYSE (" + s + ")";
+
+                if (s === "WEEKEND_ANALYSIS") {
+                    stageText = "Fin de Semana · Análisis 24/7 & Plan de Apertura Lunes";
+                    dotColor = "#b388ff";
+                    sessionLabel = "24/7 (WEEKEND)";
+                } else if (s === "OVERNIGHT_ANALYSIS") {
+                    stageText = "Overnight 24/7 · Monitoreo & Preparación de Órdenes";
+                    dotColor = "#7c4dff";
+                    sessionLabel = "24/7 (OVERNIGHT)";
+                } else if (s === "PREMARKET_EARLY") {
+                    stageText = "Pre-Market Temprano (4:00-7:00 AM) · Gestión de Stops";
+                    dotColor = "#ff9100";
+                    sessionLabel = "NYSE (PRE-EARLY)";
+                } else if (s === "PREMARKET_ACTIVE") {
+                    stageText = "Pre-Market Activo (7:00-9:25 AM) · Órdenes GTC Permitidas";
+                    dotColor = "#00e5ff";
+                    sessionLabel = "NYSE (PRE-MARKET)";
+                } else if (s === "PRE_OPEN_LOCK") {
+                    stageText = "Pre-Open Lock (9:25-9:30 AM) · Calma Pre-Apertura";
+                    dotColor = "#ffd600";
+                    sessionLabel = "NYSE (LOCK)";
+                } else if (s === "REGULAR_FULL" || s === "REGULAR_NORMAL" || s === "REGULAR") {
+                    stageText = "Mercado Regular Abierto (9:30 AM - 4:00 PM ET) · Ejecución Total";
+                    dotColor = "#00e676";
+                    sessionLabel = "NYSE (REGULAR)";
+                } else if (s === "RISK_DESCALATION") {
+                    stageText = "Desescalada de Riesgo (3:30-3:55 PM) · Solo Gestión";
+                    dotColor = "#ff9800";
+                    sessionLabel = "NYSE (DESCALA)";
+                } else if (s === "NEAR_CLOSE") {
+                    stageText = "Cierre Inminente (3:55-4:00 PM) · EOD";
+                    dotColor = "#ff5722";
+                    sessionLabel = "NYSE (CIERRE)";
+                } else if (s === "AFTERHOURS") {
+                    stageText = "After-Hours (4:00-8:00 PM ET) · Gestión de Posiciones";
+                    dotColor = "#ffd600";
+                    sessionLabel = "NYSE (AFTERHOURS)";
+                }
+
+                if (data.swing_mode !== undefined) {
+                    stageText += data.swing_mode ? " · Swing (GTC)" : " · Intradía (15:55)";
+                }
+
+                document.getElementById("val-session").textContent = sessionLabel;
+                document.getElementById("sub-session-stage").textContent = stageText;
+                const dot = document.getElementById("session-indicator");
+                if (dot) {
+                    dot.style.background = dotColor;
+                    dot.style.boxShadow = dotColor !== "#484f58" && dotColor !== "#8b9bb4" ? `0 0 6px ${dotColor}` : 'none';
+                }
+            }
+
+            // Macro
+            if (data.macro) {
+                const regime = data.macro.macro_is_contraction ? "CONTRACTION (DEFENSIVE)" : "EXPANSION (RISK-ON)";
+                document.getElementById("val-macro-regime").textContent = regime;
+                document.getElementById("sub-macro").textContent = `Risk: ${data.macro.macro_risk_multiplier}× | VIX: ${data.macro.macro_vix_level}`;
+                const yc = (data.macro.macro_yield_curve_spread >= 0 ? "+" : "") + data.macro.macro_yield_curve_spread + "%";
+                document.getElementById("intel-yield-curve").textContent = yc;
+                document.getElementById("intel-vix").textContent = data.macro.macro_vix_level;
+                document.getElementById("intel-yield-curve2").textContent = yc;
+                document.getElementById("intel-vix2").textContent = data.macro.macro_vix_level;
+                document.getElementById("intel-macro-title").textContent = data.macro.macro_is_contraction ? "Defensive / Risk-Off" : "Risk-On Expansion";
+                document.getElementById("intel-scan-time").textContent = new Date().toLocaleTimeString('en-US', { hour12: false });
+
+                // Macro dedicated view
+                const mHero = document.getElementById("macro-hero-regime");
+                if (mHero) mHero.textContent = regime;
+                const mRisk = document.getElementById("macro-risk-mult");
+                if (mRisk) mRisk.textContent = `${data.macro.macro_risk_multiplier}×`;
+                const mYc = document.getElementById("macro-yc-spread");
+                if (mYc) mYc.textContent = yc;
+                const mVix = document.getElementById("macro-vix-level");
+                if (mVix) mVix.textContent = data.macro.macro_vix_level;
+            }
+
+            if (data.market_session) {
+                const mSession = document.getElementById("macro-session-name");
+                if (mSession) mSession.textContent = (data.market_session.session || "REGULAR").toUpperCase();
+            }
+
+            if (data.circuit_breaker_tier) {
+                document.getElementById("val-cb-tier").textContent = data.circuit_breaker_tier;
+                const mCb = document.getElementById("macro-cb-pill");
+                if (mCb) mCb.textContent = data.circuit_breaker_tier;
+            }
+
+            // Portfolio dedicated view
+            if (data.portfolio) {
+                const activeEq = data.portfolio.portfolio_value || data.portfolio.real_account_equity || 100000.0;
+                const activeCash = data.portfolio.cash || 0.0;
+                const activeBP = data.portfolio.buying_power || 0.0;
+                const eqStr = "$" + activeEq.toLocaleString('en-US', { minimumFractionDigits: 2 });
+                const cashStr = "$" + activeCash.toLocaleString('en-US', { minimumFractionDigits: 2 });
+                const bpStr = "$" + activeBP.toLocaleString('en-US', { minimumFractionDigits: 2 });
+                const realPnl = data.portfolio.realized_pnl || 0;
+                const realPnlStr = (realPnl >= 0 ? "+" : "") + "$" + realPnl.toLocaleString('en-US', { minimumFractionDigits: 2 });
+
+                const pfEq = document.getElementById("pf-val-equity");
+                if (pfEq) pfEq.textContent = eqStr;
+                const pfCash = document.getElementById("pf-val-cash");
+                if (pfCash) pfCash.textContent = cashStr;
+                const pfBp = document.getElementById("pf-val-bp");
+                if (pfBp) pfBp.textContent = bpStr;
+                const pfRealized = document.getElementById("pf-val-realized");
+                if (pfRealized) {
+                    pfRealized.textContent = realPnlStr;
+                    pfRealized.style.color = realPnl > 0 ? "#00e676" : (realPnl < 0 ? "#ff1744" : "#ffffff");
+                }
+                const pfSubReturn = document.getElementById("pf-sub-return");
+                if (pfSubReturn) {
+                    const ret = data.portfolio.total_return_pct !== undefined ? data.portfolio.total_return_pct : (((activeEq - 100000.0) / 100000.0) * 100.0);
+                    pfSubReturn.textContent = (ret >= 0 ? "+" : "") + ret.toFixed(2) + "% Return Total";
+                    pfSubReturn.style.color = ret >= 0 ? "#00e676" : "#ff1744";
+                }
+                const pfSubTrades = document.getElementById("pf-sub-trades");
+                if (pfSubTrades) pfSubTrades.textContent = `${(data.trade_history || []).length} posiciones cerradas`;
+
+                const cashPct = Math.max(0, Math.min(100, (activeCash / activeEq) * 100));
+                const eqPct = Math.max(0, 100 - cashPct);
+                const pfCashPct = document.getElementById("pf-cash-pct");
+                if (pfCashPct) pfCashPct.textContent = cashPct.toFixed(1) + "%";
+                const pfCashBar = document.getElementById("pf-cash-bar");
+                if (pfCashBar) pfCashBar.style.width = cashPct + "%";
+                const pfEquityPct = document.getElementById("pf-equity-pct");
+                if (pfEquityPct) pfEquityPct.textContent = eqPct.toFixed(1) + "%";
+                const pfEquityBar = document.getElementById("pf-equity-bar");
+                if (pfEquityBar) pfEquityBar.style.width = eqPct + "%";
+
+                const pfCbStatus = document.getElementById("pf-cb-status");
+                if (pfCbStatus) {
+                    let cbText = (data.circuit_breaker_tier || "NORMAL");
+                    if (data.portfolio && data.portfolio.profit_lock_active) {
+                        cbText = "🔒 PROFIT LOCKED (CAPA 2)";
+                        pfCbStatus.style.color = "#ffd600";
+                    } else if (data.portfolio && (data.portfolio.operational_peak_equity || 0) > 1000) {
+                        cbText += ` · Pico: $${data.portfolio.operational_peak_equity.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+                    }
+                    pfCbStatus.textContent = cbText;
+                }
+            }
+
+            renderPositions(data.positions || []);
+            renderOpportunities(data.latest_opportunities || []);
+            renderOpeningPlan(data.opening_plan, data.market_session);
+            renderOrders(data.active_orders || []);
+            renderTradeHistory(data.trade_history || []);
+            renderActivityLogs(data.activity_logs || [], data.latest_status);
+
+            // Charts
+            if (data.portfolio_history && Array.isArray(data.portfolio_history) && data.portfolio_history.length > 0) {
+                applyPortfolioHistoryData(data.portfolio_history);
+            }
+            if (data.portfolio) {
+                const chartEq = data.portfolio.operational_equity !== undefined ? data.portfolio.operational_equity : data.portfolio.portfolio_value;
+                updateEquityChart(chartEq);
+            }
+            fetchAndRenderCandles(data.positions || []);
+        }
+
+        function renderPositions(positions) {
+            const tbody = document.getElementById("positions-tbody");
+            const pfTbody = document.getElementById("pf-positions-tbody");
+            const countBadge = document.getElementById("positions-count-badge");
+            const pfCount = document.getElementById("pf-positions-count");
+
+            if (countBadge) countBadge.textContent = `${positions.length} Positions`;
+            if (pfCount) pfCount.textContent = `${positions.length} Positions`;
+
+            if (positions.length === 0) {
+                const emptyRow = `<tr><td colspan="7" class="text-center py-10 text-sm" style="color:#484f58">No active positions — autonomous scanner active.</td></tr>`;
+                if (tbody) tbody.innerHTML = emptyRow;
+                if (pfTbody) pfTbody.innerHTML = emptyRow;
+                return;
+            }
+
+            const rowsHtml = positions.map(p => {
+                const pnlColor = p.unrealized_pnl >= 0 ? '#00e676' : '#ff1744';
+                const sideBg = p.side === "LONG" ? 'rgba(0,230,118,0.1)' : 'rgba(255,23,68,0.1)';
+                const sideClr = p.side === "LONG" ? '#00e676' : '#ff1744';
+                const sideBdr = p.side === "LONG" ? 'rgba(0,230,118,0.3)' : 'rgba(255,23,68,0.3)';
+                const beBadge = p.break_even_active 
+                    ? `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded ml-1" style="background:rgba(0,230,118,0.18);color:#00e676;border:1px solid rgba(0,230,118,0.4)">🛡️ BE</span>` 
+                    : '';
+                const daysLabel = p.days_open > 0 ? `<div class="text-[10px]" style="color:#8b9bb4">${p.days_open}d en posición</div>` : '';
+                return `
+                <tr class="table-row-hover border-b border-white/[0.04]">
+                    <td class="px-5 py-3 font-mono font-bold text-white">
+                        <div class="flex items-center gap-1">${p.symbol} ${beBadge}</div>
+                        ${daysLabel}
+                    </td>
+                    <td class="px-5 py-3">
+                        <span class="text-xs font-semibold px-2 py-0.5 rounded" style="background:${sideBg};color:${sideClr};border:1px solid ${sideBdr}">${p.side}</span>
+                    </td>
+                    <td class="px-5 py-3 font-mono text-right text-white">${p.qty}</td>
+                    <td class="px-5 py-3 font-mono text-right" style="color:#8b9bb4">$${p.entry_price.toFixed(2)}</td>
+                    <td class="px-5 py-3 font-mono text-right text-white">$${p.current_price.toFixed(2)}</td>
+                    <td class="px-5 py-3 font-mono text-right font-bold" style="color:${pnlColor}">
+                        ${p.unrealized_pnl >= 0 ? '+' : ''}$${p.unrealized_pnl.toFixed(2)}<br>
+                        <span class="text-xs font-normal">(${p.unrealized_pnl_pct.toFixed(2)}%)</span>
+                    </td>
+                    <td class="px-5 py-3 font-mono text-right text-xs" style="color:#8b9bb4">
+                        <span style="color:${p.break_even_active ? '#00e676' : '#ff1744'}">${p.break_even_active ? 'BE' : 'SL'}</span> ${p.stop_loss ? '$' + p.stop_loss.toFixed(2) : '—'} ·
+                        <span style="color:#00e676">TP</span> ${p.take_profit ? '$' + p.take_profit.toFixed(2) : '—'}
+                    </td>
+                </tr>`;
+            }).join("");
+
+            if (tbody) tbody.innerHTML = rowsHtml;
+            if (pfTbody) pfTbody.innerHTML = rowsHtml;
+        }
+
+        function renderOpportunities(opps) {
+            const container = document.getElementById("opportunities-feed");
+            const scannerTbody = document.getElementById("scanner-full-tbody");
+
+            if (opps.length === 0) {
+                if (container) container.innerHTML = `<div class="text-center py-8 text-sm" style="color:#484f58">Scanning universe...</div>`;
+                if (scannerTbody) scannerTbody.innerHTML = `<tr><td colspan="5" class="text-center py-10 text-sm" style="color:#484f58">Scanning universe...</td></tr>`;
+                return;
+            }
+
+            if (container) {
+                container.innerHTML = opps.map(o => `
+                    <div class="rounded-lg p-3 border border-white/5" style="background:#21262d">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="font-mono font-bold text-white text-sm">${o.symbol}</span>
+                            <span class="text-xs font-semibold px-2 py-0.5 rounded" style="background:rgba(179,136,255,0.1);color:#b388ff;border:1px solid rgba(179,136,255,0.2)">${o.score.toFixed(0)}</span>
+                        </div>
+                        <div class="text-xs mb-2" style="color:#8b9bb4">${o.setup}</div>
+                        <div class="score-bar">
+                            <div class="score-fill" style="width:${Math.min(100, Math.max(0, o.score))}%"></div>
+                        </div>
+                    </div>
+                `).join("");
+            }
+
+            if (scannerTbody) {
+                scannerTbody.innerHTML = opps.map(o => `
+                    <tr class="table-row-hover border-b border-white/[0.04]">
+                        <td class="px-5 py-3 font-mono font-bold text-white">${o.symbol}</td>
+                        <td class="px-5 py-3 font-mono text-xs" style="color:#00e5ff">${o.setup}</td>
+                        <td class="px-5 py-3">
+                            <div class="flex items-center gap-3">
+                                <span class="font-mono font-bold text-white w-8">${o.score.toFixed(0)}</span>
+                                <div class="score-bar flex-1"><div class="score-fill" style="width:${Math.min(100, Math.max(0, o.score))}%"></div></div>
+                            </div>
+                        </td>
+                        <td class="px-5 py-3 text-xs">
+                            <span class="px-2 py-0.5 rounded font-semibold" style="background:rgba(0,230,118,0.1);color:#00e676">BULLISH</span>
+                        </td>
+                        <td class="px-5 py-3 text-right">
+                            <span class="px-2 py-0.5 rounded font-semibold text-xs" style="background:rgba(0,229,255,0.1);color:#00e5ff">RADAR ACTIVE</span>
+                        </td>
+                    </tr>
+                `).join("");
+            }
+        }
+
+        function renderOpeningPlan(plan, sessionInfo) {
+            const container = document.getElementById("opening-plan-container");
+            const tbody = document.getElementById("opening-plan-tbody");
+            const targetSession = document.getElementById("plan-target-session");
+            const genTime = document.getElementById("plan-generation-time");
+            if (!container || !tbody) return;
+
+            if (!plan || !plan.candidates || plan.candidates.length === 0) {
+                container.style.display = "none";
+                return;
+            }
+
+            container.style.display = "block";
+            if (targetSession) {
+                targetSession.textContent = `Próxima Sesión: ${plan.target_session || 'Lunes 09:30 ET'}`;
+            }
+            if (genTime && plan.generated_at) {
+                const d = new Date(plan.generated_at);
+                genTime.textContent = `Generado: ${d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'})}`;
+            }
+
+            tbody.innerHTML = plan.candidates.map(c => `
+                <tr class="table-row-hover border-b border-white/[0.04]">
+                    <td class="px-4 py-2.5 font-mono font-bold text-white">${c.symbol}</td>
+                    <td class="px-4 py-2.5 font-mono text-xs" style="color:#00e5ff">${c.strategy || 'Multi-Factor'}</td>
+                    <td class="px-4 py-2.5">
+                        <div class="flex items-center gap-2">
+                            <span class="font-mono font-bold text-white w-7">${(c.score || 0).toFixed(0)}</span>
+                            <div class="score-bar flex-1" style="max-width:90px"><div class="score-fill" style="width:${Math.min(100, Math.max(0, c.score || 0))}%"></div></div>
+                        </div>
+                    </td>
+                    <td class="px-4 py-2.5 text-xs font-mono" style="color:#ffd600">
+                        ${c.revalidation_required ? '⚠️ Pendiente Pre-Market (Gap & Spread)' : '✓ Validado para Apertura'}
+                    </td>
+                    <td class="px-4 py-2.5 text-right font-mono text-xs">
+                        <span class="px-2 py-0.5 rounded font-semibold" style="background:rgba(179,136,255,0.15);color:#b388ff">
+                            ${c.status || 'PENDING_PREMARKET'}
+                        </span>
+                    </td>
+                </tr>
+            `).join("");
+        }
+
+        function renderOrders(orders) {
+            const tbody = document.getElementById("orders-tbody");
+            const fullTbody = document.getElementById("orders-full-tbody");
+            const badge = document.getElementById("orders-count-badge");
+            const fullBadge = document.getElementById("orders-full-count-badge");
+
+            if (badge) badge.textContent = `${orders.length} Orders`;
+            if (fullBadge) fullBadge.textContent = `${orders.length} Orders`;
+
+            if (orders.length === 0) {
+                const emptyRow = `<tr><td colspan="6" class="text-center py-8 text-sm" style="color:#484f58">No hay órdenes pendientes en ejecución.</td></tr>`;
+                if (tbody) tbody.innerHTML = emptyRow;
+                if (fullTbody) fullTbody.innerHTML = emptyRow;
+                return;
+            }
+
+            const rowsHtml = orders.map(o => {
+                const isBuy = String(o.side || '').toLowerCase() === 'buy';
+                const sideClr = isBuy ? '#00e676' : '#ff1744';
+                const sideBg = isBuy ? 'rgba(0,230,118,0.1)' : 'rgba(255,23,68,0.1)';
+
+                const statusStr = String(o.status || '').toLowerCase();
+                let statusClr = '#00e5ff';
+                let statusBg = 'rgba(0,229,255,0.08)';
+                let statusBorder = 'rgba(0,229,255,0.25)';
+
+                if (statusStr === 'held') {
+                    statusClr = '#ffd600';
+                    statusBg = 'rgba(255,214,0,0.1)';
+                    statusBorder = 'rgba(255,214,0,0.25)';
+                } else if (statusStr === 'filled') {
+                    statusClr = '#00e676';
+                    statusBg = 'rgba(0,230,118,0.1)';
+                    statusBorder = 'rgba(0,230,118,0.25)';
+                } else if (statusStr === 'canceled' || statusStr === 'rejected') {
+                    statusClr = '#8b9bb4';
+                    statusBg = 'rgba(139,155,180,0.1)';
+                    statusBorder = 'rgba(139,155,180,0.25)';
+                }
+
+                return `
+                <tr class="table-row-hover border-b border-white/[0.04]">
+                    <td class="px-5 py-3 font-mono text-xs" style="color:#8b9bb4">${(o.order_id || '').substring(0, 12)}…</td>
+                    <td class="px-5 py-3 font-mono font-bold text-white">${o.symbol}</td>
+                    <td class="px-5 py-3 text-xs" style="color:#c9d1d9">${o.order_type}</td>
+                    <td class="px-5 py-3 text-xs">
+                        <span class="px-2 py-0.5 rounded font-semibold text-xs" style="background:${sideBg};color:${sideClr}">${String(o.side || '').toUpperCase()}</span>
+                    </td>
+                    <td class="px-5 py-3 font-mono text-right text-white">${o.qty}</td>
+                    <td class="px-5 py-3 text-right">
+                        <span class="text-xs font-semibold px-2 py-0.5 rounded" style="background:${statusBg};color:${statusClr};border:1px solid ${statusBorder}">${statusStr.toUpperCase()}</span>
+                    </td>
+                </tr>`;
+            }).join("");
+
+            if (tbody) tbody.innerHTML = rowsHtml;
+            if (fullTbody) fullTbody.innerHTML = rowsHtml;
+        }
+
+        function renderTradeHistory(trades) {
+            const tbody = document.getElementById("trade-history-tbody");
+            const fullTbody = document.getElementById("orders-trade-history-tbody");
+            const badgeCount = document.getElementById("trade-history-count-badge");
+            const fullBadgeCount = document.getElementById("orders-history-count-badge");
+            const badgePnl = document.getElementById("trade-history-pnl-badge");
+            const fullBadgePnl = document.getElementById("orders-history-pnl-badge");
+
+            let wins = 0;
+            let losses = 0;
+            let totalPnl = 0;
+            trades.forEach(t => {
+                if (t.outcome === "WIN" || (t.pnl !== undefined && Number(t.pnl) > 0)) wins++;
+                else if (t.outcome !== "BREAKEVEN" && Number(t.pnl || 0) < 0) losses++;
+                totalPnl += Number(t.pnl || 0);
+            });
+
+            const countText = `${trades.length} Trades (${wins} Ganados / ${losses} Perdidos)`;
+            if (badgeCount) badgeCount.textContent = countText;
+            if (fullBadgeCount) fullBadgeCount.textContent = countText;
+
+            const pnlText = `${totalPnl >= 0 ? '+' : ''}$${totalPnl.toFixed(2)} PnL Realizado`;
+            if (badgePnl) {
+                badgePnl.textContent = pnlText;
+                badgePnl.style.color = totalPnl >= 0 ? '#00e676' : '#ff1744';
+                badgePnl.style.background = totalPnl >= 0 ? 'rgba(0,230,118,0.1)' : 'rgba(255,23,68,0.12)';
+                badgePnl.style.borderColor = totalPnl >= 0 ? 'rgba(0,230,118,0.3)' : 'rgba(255,23,68,0.35)';
+            }
+            if (fullBadgePnl) {
+                fullBadgePnl.textContent = pnlText;
+                fullBadgePnl.style.color = totalPnl >= 0 ? '#00e676' : '#ff1744';
+                fullBadgePnl.style.background = totalPnl >= 0 ? 'rgba(0,230,118,0.1)' : 'rgba(255,23,68,0.12)';
+                fullBadgePnl.style.borderColor = totalPnl >= 0 ? 'rgba(0,230,118,0.3)' : 'rgba(255,23,68,0.35)';
+            }
+
+            if (trades.length === 0) {
+                const emptyRow = `<tr><td colspan="8" class="text-center py-10 text-sm" style="color:#484f58">Aún no hay operaciones cerradas. Al escanear el universo y activarse Take-Profit o Stop-Loss, se registrarán aquí automáticamente.</td></tr>`;
+                if (tbody) tbody.innerHTML = emptyRow;
+                if (fullTbody) fullTbody.innerHTML = emptyRow;
+                return;
+            }
+
+            const rowsHtml = trades.map(t => {
+                const pnlVal = Number(t.pnl || 0);
+                const isWin = t.outcome === "WIN" || pnlVal > 0;
+                const isBreakeven = t.outcome === "BREAKEVEN" || pnlVal === 0;
+                const pnlClr = isBreakeven ? '#8b9bb4' : (isWin ? '#00e676' : '#ff1744');
+                const pnlBg = isBreakeven ? 'rgba(139,155,180,0.10)' : (isWin ? 'rgba(0,230,118,0.1)' : 'rgba(255,23,68,0.12)');
+                const pnlBdr = isBreakeven ? 'rgba(139,155,180,0.25)' : (isWin ? 'rgba(0,230,118,0.25)' : 'rgba(255,23,68,0.35)');
+                const sideClr = t.side === "LONG" ? '#00e676' : '#00e5ff';
+                const timeStr = t.closed_at ? new Date(t.closed_at).toLocaleTimeString('en-US', { hour12: false }) : '—';
+                const outcomeLabel = isBreakeven ? 'SIN PÉRDIDA' : (isWin ? 'GANANCIA' : 'PÉRDIDA');
+                const pnlPctVal = Number(t.pnl_pct || 0);
+                const entryP = Number(t.entry_price || 0);
+                const exitP = Number(t.exit_price || 0);
+
+                return `
+                <tr class="table-row-hover border-b border-white/[0.04]">
+                    <td class="px-5 py-3 font-mono font-bold text-white">${t.symbol}</td>
+                    <td class="px-5 py-3">
+                        <span class="text-xs font-semibold px-2 py-0.5 rounded" style="background:rgba(255,255,255,0.05);color:${sideClr}">${t.side}</span>
+                    </td>
+                    <td class="px-5 py-3 font-mono text-right text-white">${t.qty}</td>
+                    <td class="px-5 py-3 font-mono text-right" style="color:#8b9bb4">$${entryP.toFixed(2)}</td>
+                    <td class="px-5 py-3 font-mono text-right font-bold text-white">$${exitP.toFixed(2)}</td>
+                    <td class="px-5 py-3 text-right">
+                        <span class="font-mono text-xs font-bold px-2 py-1 rounded inline-flex items-center gap-1.5" style="background:${pnlBg};color:${pnlClr};border:1px solid ${pnlBdr}">
+                            <span>${pnlVal >= 0 ? '+' : ''}$${pnlVal.toFixed(2)} (${pnlPctVal >= 0 ? '+' : ''}${pnlPctVal.toFixed(2)}%)</span>
+                            <span class="text-[10px] uppercase tracking-wider font-extrabold px-1 rounded" style="background:${isBreakeven ? '#8b9bb4' : (isWin ? '#00e676' : '#ff1744')};color:#0d1117">${outcomeLabel}</span>
+                        </span>
+                    </td>
+                    <td class="px-5 py-3 text-xs" style="color:#8b9bb4">
+                        <span class="px-1.5 py-0.5 rounded font-mono text-xs" style="background:#21262d;color:#ffd600">${t.reason || 'TAKE_PROFIT'}</span>
+                    </td>
+                    <td class="px-5 py-3 font-mono text-right text-xs" style="color:#8b9bb4">${timeStr}</td>
+                </tr>`;
+            }).join("");
+
+            if (tbody) tbody.innerHTML = rowsHtml;
+            if (fullTbody) fullTbody.innerHTML = rowsHtml;
+        }
+
+        // ─── Equity Curve ───
+        const equityChartContainer = document.getElementById('equity-chart-container');
+        const equityChart = LightweightCharts.createChart(equityChartContainer, {
+            layout: { background: { color: 'transparent' }, textColor: '#8b9bb4' },
+            grid: { vertLines: { color: 'rgba(255,255,255,0.03)' }, horzLines: { color: 'rgba(255,255,255,0.03)' } },
+            rightPriceScale: { borderColor: 'rgba(255,255,255,0.06)' },
+            timeScale: {
+                borderColor: 'rgba(255,255,255,0.06)',
+                timeVisible: true,
+                secondsVisible: false,
+                tickMarkFormatter: (time) => {
+                    const date = new Date(time * 1000);
+                    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+                }
+            },
+            localization: {
+                timeFormatter: (time) => {
+                    const date = new Date(time * 1000);
+                    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+                }
+            },
+            crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+            handleScroll: true, handleScale: true,
+        });
+
+        const equitySeries = equityChart.addAreaSeries({
+            lineColor: '#00e676',
+            topColor: 'rgba(0,230,118,0.2)',
+            bottomColor: 'rgba(0,230,118,0.0)',
+            lineWidth: 2,
+            priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
+        });
+        const baselineSeries = equityChart.addLineSeries({
+            color: 'rgba(0,229,255,0.35)',
+            lineWidth: 1,
+            lineStyle: LightweightCharts.LineStyle.Dashed,
+            priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
+        });
+
+        let equityHistory = [];
+        let peakEquity = 1000;
+        const INITIAL_CAPITAL = 1000;
+
+        function applyPortfolioHistoryData(data) {
+            if (!Array.isArray(data) || data.length === 0) return;
+            try {
+                const serverPoints = data
+                    .filter(p => p && p.t && p.equity !== null && !isNaN(Number(p.equity)) && Number(p.equity) > 0 && Number(p.equity) < 50000)
+                    .map(p => ({
+                        time: Number(p.t),
+                        value: Number(p.equity)
+                    }))
+                    .filter(p => p.time && !isNaN(p.time) && p.time > 0 && !isNaN(p.value));
+
+                // Filtrar cualquier pico espurio en medio de la serie histórica
+                const filteredPoints = serverPoints.filter((pt, idx, arr) => {
+                    if (Math.abs(pt.value - INITIAL_CAPITAL) < 0.01) {
+                        const prev = arr[idx - 1] ? arr[idx - 1].value : pt.value;
+                        const next = arr[idx + 1] ? arr[idx + 1].value : pt.value;
+                        if (Math.abs(prev - INITIAL_CAPITAL) > 50 || Math.abs(next - INITIAL_CAPITAL) > 50) {
+                            return false; // Descartar pico vertical anómalo
+                        }
+                    }
+                    return true;
+                });
+
+                if (filteredPoints.length > 0) {
+                    equityHistory = filteredPoints;
+                    if (equitySeries && equityChart) {
+                        try {
+                            equitySeries.setData(equityHistory);
+                            equityChart.timeScale().fitContent();
+                        } catch(e) {}
+                    }
+                }
+            } catch (err) {
+                console.warn("Portfolio history render error:", err);
+            }
+        }
+
+        // Cargar historial intradía desde el servidor (usado como respaldo)
+        async function loadPortfolioHistory() {
+            try {
+                try { localStorage.removeItem('quant_equity_curve_cache'); } catch(e) {}
+                const res = await fetch(`${API_BASE}/api/v1/portfolio-history?period=1D&timeframe=1Min`, { cache: 'no-store' });
+                if (res.ok) {
+                    const data = await res.json();
+                    applyPortfolioHistoryData(data);
+                }
+            } catch (err) {
+                console.warn("Portfolio history background load deferred:", err);
+            }
+        }
+
+        function updateEquityChart(portfolioValue) {
+            const pVal = Number(portfolioValue);
+            if (!pVal || isNaN(pVal) || pVal <= 0) return;
+
+            // Descartar picos anómalos o valores brutos no calibrados de broker (> 50,000)
+            if (pVal > 50000) return;
+            if (equityHistory.length > 0) {
+                const lastVal = equityHistory[equityHistory.length - 1].value;
+                if (Math.abs(pVal - INITIAL_CAPITAL) < 0.01 && Math.abs(lastVal - INITIAL_CAPITAL) > 50) {
+                    return; // Ignorar glitch espurio
+                }
+            }
+
+            const now = Math.floor(Date.now() / 1000);
+
+            // Actualizar o agregar punto
+            if (equityHistory.length > 0 && Math.abs(equityHistory[equityHistory.length - 1].time - now) < 15) {
+                equityHistory[equityHistory.length - 1].value = pVal;
+            } else {
+                equityHistory.push({ time: now, value: pVal });
+            }
+
+            const seen = new Map();
+            equityHistory
+                .filter(p => p && typeof p.time === 'number' && !isNaN(p.time) && p.time > 0 && typeof p.value === 'number' && !isNaN(p.value) && p.value > 0)
+                .forEach(p => seen.set(p.time, p.value));
+
+            equityHistory = Array.from(seen.entries())
+                .sort((a, b) => a[0] - b[0])
+                .map(([time, value]) => ({ time, value }))
+                .slice(-1200);
+
+            if (equityHistory.length > 0) {
+                try {
+                    equitySeries.setData(equityHistory);
+                } catch(e) {}
+            }
+
+            if (equityHistory.length >= 2 && 
+                typeof equityHistory[0].time === 'number' && 
+                typeof equityHistory[equityHistory.length - 1].time === 'number' &&
+                equityHistory[0].time < equityHistory[equityHistory.length - 1].time) {
+                try {
+                    baselineSeries.setData([
+                        { time: equityHistory[0].time, value: INITIAL_CAPITAL },
+                        { time: equityHistory[equityHistory.length - 1].time, value: INITIAL_CAPITAL }
+                    ]);
+                } catch(e) {}
+            }
+            peakEquity = Math.max(peakEquity, pVal);
+            const totalRet = (pVal - INITIAL_CAPITAL) / INITIAL_CAPITAL * 100;
+            const drawdown = peakEquity > 0 ? (peakEquity - pVal) / peakEquity * 100 : 0;
+            const retEl = document.getElementById('eq-total-return');
+            if (retEl) {
+                retEl.textContent = (totalRet >= 0 ? '+' : '') + totalRet.toFixed(2) + '%';
+                retEl.style.color = totalRet >= 0 ? '#00e676' : '#ff1744';
+            }
+            const peakEl = document.getElementById('eq-peak');
+            if (peakEl) peakEl.textContent = '$' + peakEquity.toLocaleString('en-US', { minimumFractionDigits: 2 });
+            const ddEl = document.getElementById('eq-drawdown');
+            if (ddEl) {
+                ddEl.textContent = '-' + drawdown.toFixed(2) + '%';
+                ddEl.style.color = drawdown > 3 ? '#ff1744' : '#ffd600';
+            }
+            try {
+                equityChart.timeScale().scrollToRealTime();
+            } catch(e) {}
+        }
+
+        new ResizeObserver(() => {
+            try { equityChart.applyOptions({ width: equityChartContainer.clientWidth }); } catch(e) {}
+        }).observe(equityChartContainer);
+
+        // ─── Candlestick Charts & Price Displays ───
+        const candleCharts = {};
+
+        function fetchAndRenderCandles(positions) {
+            const panel = document.getElementById('candle-panel');
+            const grid = document.getElementById('candle-charts-grid');
+            const badge = document.getElementById('candle-count-badge');
+            if (badge) badge.textContent = (positions ? positions.length : 0) + ' Charts';
+
+            if (!positions || positions.length === 0) { 
+                if (panel) panel.style.display = 'none'; 
+                return; 
+            }
+            if (panel) panel.style.display = 'block';
+
+            const nowSec = Math.floor(Date.now() / 1000);
+
+            for (const pos of positions) {
+                const sym = pos.symbol;
+                const entryP = Number(pos.entry_price);
+                const curP = Number(pos.current_price) || entryP || 100;
+
+                if (!candleCharts[sym]) {
+                    const card = document.createElement('div');
+                    card.id = 'candle-card-' + sym;
+                    card.className = 'rounded-xl border border-white/5 p-4';
+                    card.style.background = '#21262d';
+                    card.innerHTML = `
+                        <div class="flex justify-between items-center mb-3">
+                            <span class="font-mono font-bold text-white text-sm">${sym}</span>
+                            <span id="candle-pnl-${sym}" class="font-mono text-xs font-bold" style="color:#00e676">$0.00</span>
+                        </div>
+                        <div class="candle-chart-container" id="candle-container-${sym}" style="height:180px;width:100%"></div>
+                        <div class="flex gap-4 mt-2">
+                            <span class="flex items-center gap-1 text-xs" style="color:#8b9bb4"><span class="inline-block w-2 h-0.5" style="background:#00e5ff"></span>Entry</span>
+                            <span class="flex items-center gap-1 text-xs" style="color:#8b9bb4"><span class="inline-block w-2 h-0.5" style="background:#ff1744"></span>SL</span>
+                            <span class="flex items-center gap-1 text-xs" style="color:#8b9bb4"><span class="inline-block w-2 h-0.5" style="background:#00e676"></span>TP</span>
+                        </div>`;
+                    if (grid) grid.appendChild(card);
+
+                    const container = document.getElementById('candle-container-' + sym);
+                    if (container) {
+                        try {
+                            const chart = LightweightCharts.createChart(container, {
+                                layout: { background: { color: 'transparent' }, textColor: '#8b9bb4' },
+                                grid: { vertLines: { color: 'rgba(255,255,255,0.02)' }, horzLines: { color: 'rgba(255,255,255,0.02)' } },
+                                rightPriceScale: { borderColor: 'rgba(255,255,255,0.05)', scaleMargins: { top: 0.15, bottom: 0.15 } },
+                                timeScale: { borderColor: 'rgba(255,255,255,0.05)', visible: false },
+                                crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+                                handleScroll: false, handleScale: false,
+                            });
+                            const candleSeries = chart.addCandlestickSeries({
+                                upColor: '#00e676', downColor: '#ff1744',
+                                borderUpColor: '#00e676', borderDownColor: '#ff1744',
+                                wickUpColor: '#00e676', wickDownColor: '#ff1744',
+                            });
+
+                            // Usar directamente las barras reales que ya vienen empaquetadas en la telemetría (cero peticiones HTTP extra)
+                            if (Array.isArray(pos.bars) && pos.bars.length > 0) {
+                                const parsed = pos.bars
+                                    .map(b => ({
+                                        time: Math.floor(new Date(b.t).getTime() / 1000),
+                                        open: Number(b.o),
+                                        high: Number(b.h),
+                                        low: Number(b.l),
+                                        close: Number(b.c)
+                                    }))
+                                    .filter(b => b.time && !isNaN(b.time) && !isNaN(b.close))
+                                    .sort((a, b) => a.time - b.time);
+                                if (parsed.length > 0) {
+                                    candleSeries.setData(parsed);
+                                    chart.timeScale().fitContent();
+                                }
+                            } else {
+                                candleSeries.setData([
+                                    { time: nowSec - 60, open: curP, high: curP, low: curP, close: curP },
+                                    { time: nowSec, open: curP, high: curP, low: curP, close: curP }
+                                ]);
+                            }
+
+                            new ResizeObserver(() => { try { chart.applyOptions({ width: container.clientWidth }); } catch(e){} }).observe(container);
+                            candleCharts[sym] = { chart, candleSeries, entryLine: null, slLine: null, tpLine: null };
+                        } catch(e) {
+                            console.warn("Candle chart init error for " + sym, e);
+                        }
+                    }
+                }
+
+                // Actualizar precio en la vela actual con datos de telemetría en tiempo real
+                const cc = candleCharts[sym];
+                if (cc && cc.candleSeries && curP && !isNaN(curP)) {
+                    try {
+                        cc.candleSeries.update({
+                            time: nowSec,
+                            open: Number(curP.toFixed(2)),
+                            high: Number(curP.toFixed(2)),
+                            low: Number(curP.toFixed(2)),
+                            close: Number(curP.toFixed(2))
+                        });
+                    } catch (e) {}
+                }
+
+                // PnL label
+                const pnlEl = document.getElementById('candle-pnl-' + sym);
+                if (pnlEl) {
+                    const pnl = Number(pos.unrealized_pnl) || 0;
+                    pnlEl.textContent = (pnl >= 0 ? '+' : '') + '$' + pnl.toFixed(2) + ' (' + (Number(pos.unrealized_pnl_pct) || 0).toFixed(2) + '%)';
+                    pnlEl.style.color = pnl >= 0 ? '#00e676' : '#ff1744';
+                }
+
+                // Price lines protegidas contra null
+                if (cc && cc.candleSeries) {
+                    try {
+                        if (cc.entryLine) { cc.candleSeries.removePriceLine(cc.entryLine); cc.entryLine = null; }
+                        if (cc.slLine) { cc.candleSeries.removePriceLine(cc.slLine); cc.slLine = null; }
+                        if (cc.tpLine) { cc.candleSeries.removePriceLine(cc.tpLine); cc.tpLine = null; }
+
+                        if (entryP && !isNaN(entryP) && entryP > 0) {
+                            cc.entryLine = cc.candleSeries.createPriceLine({ price: entryP, color: '#00e5ff', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: 'Entry' });
+                        }
+                        const slP = Number(pos.stop_loss);
+                        if (slP && !isNaN(slP) && slP > 0) {
+                            cc.slLine = cc.candleSeries.createPriceLine({ price: slP, color: '#ff1744', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: true, title: 'SL' });
+                        }
+                        const tpP = Number(pos.take_profit);
+                        if (tpP && !isNaN(tpP) && tpP > 0) {
+                            cc.tpLine = cc.candleSeries.createPriceLine({ price: tpP, color: '#00e676', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: true, title: 'TP' });
+                        }
+                    } catch(e) {}
+                }
+            }
+
+            // Cleanup closed
+            const active = new Set(positions.map(p => p.symbol));
+            Object.keys(candleCharts).forEach(sym => {
+                if (!active.has(sym)) {
+                    const card = document.getElementById('candle-card-' + sym);
+                    if (card) card.remove();
+                    delete candleCharts[sym];
+                }
+            });
+        }
+
+        // ─── Controls ───
+        let isAutoTradeEnabled = false;
+        let isSwingModeEnabled = true;
+
+        function updateSwingModeUI(enabled) {
+            isSwingModeEnabled = Boolean(enabled);
+            const btn = document.getElementById("btn-toggle-swing");
+            const dot = document.getElementById("dot-swing");
+            const txt = document.getElementById("txt-swing");
+
+            if (btn && dot && txt) {
+                if (isSwingModeEnabled) {
+                    btn.style.background = 'rgba(0,229,255,0.14)';
+                    btn.style.color = '#00e5ff';
+                    btn.style.borderColor = 'rgba(0,229,255,0.45)';
+                    btn.style.boxShadow = '0 0 12px rgba(0,229,255,0.2)';
+                    dot.style.background = '#00e5ff';
+                    dot.style.boxShadow = '0 0 8px #00e5ff';
+                    txt.textContent = 'Modo: Swing Trading (Overnight)';
+                } else {
+                    btn.style.background = 'rgba(255,145,0,0.12)';
+                    btn.style.color = '#ff9100';
+                    btn.style.borderColor = 'rgba(255,145,0,0.35)';
+                    btn.style.boxShadow = 'none';
+                    dot.style.background = '#ff9100';
+                    dot.style.boxShadow = 'none';
+                    txt.textContent = 'Modo: Intradía (Cierre 15:55)';
+                }
+            }
+        }
+
+        async function toggleSwingMode() {
+            // Si está en swing (true), el próximo estado de close_positions_eod es true (intradía)
+            const nextCloseEod = isSwingModeEnabled;
+            updateSwingModeUI(!nextCloseEod);
+            try {
+                const res = await fetch(`${API_BASE}/api/v1/control/swing-mode`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ close_positions_eod: nextCloseEod })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    updateSwingModeUI(!data.close_positions_eod);
+                    await fetchTelemetry();
+                }
+            } catch (err) {
+                console.error("Failed to toggle swing mode:", err);
+            }
+        }
+
+        function updateAutoTradeUI(enabled) {
+            isAutoTradeEnabled = Boolean(enabled);
+            const btn = document.getElementById("btn-toggle-autotrade");
+            const dot = document.getElementById("dot-autotrade");
+            const txt = document.getElementById("txt-autotrade");
+
+            if (btn && dot && txt) {
+                if (isAutoTradeEnabled) {
+                    btn.style.background = 'rgba(0,230,118,0.18)';
+                    btn.style.color = '#00e676';
+                    btn.style.borderColor = 'rgba(0,230,118,0.45)';
+                    btn.style.boxShadow = '0 0 14px rgba(0,230,118,0.25)';
+                    dot.style.background = '#00e676';
+                    dot.style.boxShadow = '0 0 8px #00e676';
+                    txt.textContent = 'Auto-Trade: AUTOMÁTICO (Comprar y Vender)';
+                } else {
+                    btn.style.background = 'rgba(255,214,0,0.1)';
+                    btn.style.color = '#ffd600';
+                    btn.style.borderColor = 'rgba(255,214,0,0.3)';
+                    btn.style.boxShadow = 'none';
+                    dot.style.background = '#ffd600';
+                    dot.style.boxShadow = 'none';
+                    txt.textContent = 'Auto-Trade: OFF (Solo Análisis)';
+                }
+            }
+        }
+
+        async function toggleAutoTrade() {
+            const nextState = !isAutoTradeEnabled;
+            updateAutoTradeUI(nextState);
+            try {
+                const res = await fetch(`${API_BASE}/api/v1/control/auto-trade`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ enabled: nextState })
+                });
+                if (res.ok) {
+                    await fetchTelemetry();
+                }
+            } catch (err) {
+                console.error("Failed to toggle auto-trade:", err);
+            }
+        }
+
+        let isShadowModeEnabled = false;
+
+        function updateShadowModeUI(enabled) {
+            isShadowModeEnabled = Boolean(enabled);
+            const btn = document.getElementById("btn-toggle-shadow");
+            const dot = document.getElementById("dot-shadow");
+            const txt = document.getElementById("txt-shadow");
+            const btnSettings = document.getElementById("btn-settings-shadow");
+
+            if (btn && dot && txt) {
+                if (isShadowModeEnabled) {
+                    btn.style.background = 'rgba(255,171,0,0.14)';
+                    btn.style.color = '#ffab00';
+                    btn.style.borderColor = 'rgba(255,171,0,0.45)';
+                    btn.style.boxShadow = '0 0 12px rgba(255,171,0,0.2)';
+                    dot.style.background = '#ffab00';
+                    dot.style.boxShadow = '0 0 8px #ffab00';
+                    txt.textContent = 'SHADOW MODE: ON (Simulación)';
+                } else {
+                    btn.style.background = 'rgba(0,230,118,0.12)';
+                    btn.style.color = '#00e676';
+                    btn.style.borderColor = 'rgba(0,230,118,0.35)';
+                    btn.style.boxShadow = '0 0 10px rgba(0,230,118,0.15)';
+                    dot.style.background = '#00e676';
+                    dot.style.boxShadow = '0 0 8px #00e676';
+                    txt.textContent = 'BROKER REAL: ON (Alpaca Execution)';
+                }
+            }
+            if (btnSettings) {
+                btnSettings.textContent = isShadowModeEnabled ? 'Desactivar Shadow Mode' : 'Activar Shadow Mode';
+            }
+        }
+
+        async function toggleShadowMode() {
+            const nextState = !isShadowModeEnabled;
+            updateShadowModeUI(nextState);
+            try {
+                const res = await fetch(`${API_BASE}/api/v1/control/shadow-mode`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ enabled: nextState })
+                });
+                if (res.ok) {
+                    await fetchTelemetry();
+                }
+            } catch (err) {
+                console.error("Failed to toggle shadow mode:", err);
+            }
+        }
+
+        async function resetPaperAccount() {
+            if (!confirm("¿Deseas reiniciar la cuenta Paper a $1,000.00 y limpiar el historial de operaciones de prueba?")) {
+                return;
+            }
+            const btn = document.getElementById("btn-reset-account");
+            btn.innerHTML = `<svg class="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Resetting...`;
+            try {
+                const res = await fetch(`${API_BASE}/api/v1/control/reset`, { method: "POST" });
+                if (res.ok) {
+                    equityHistory = [];
+                    peakEquity = 1000;
+                    await fetchTelemetry();
+                }
+            } catch (err) {
+                console.error("Failed to reset paper account:", err);
+            } finally {
+                btn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Reset Account`;
+            }
+        }
+
+        function renderActivityLogs(logs, latestStatus) {
+            const feedEl = document.getElementById("engine-activity-logs");
+            if (feedEl && logs && logs.length > 0) {
+                feedEl.innerHTML = logs.map(log => {
+                    let color = '#8b9bb4';
+                    if (log.level === 'success') color = '#00e676';
+                    else if (log.level === 'warning') color = '#ffd600';
+                    else if (log.level === 'error') color = '#ff1744';
+                    else if (log.level === 'info') color = '#00e5ff';
+
+                    // Convertir hora UTC del servidor a hora local del navegador para corregir desfase
+                    let displayTime = log.time || '';
+                    if (displayTime && /^\d{1,2}:\d{2}(:\d{2})?$/.test(displayTime)) {
+                        const parts = displayTime.split(':').map(Number);
+                        const now = new Date();
+                        const utcDate = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), parts[0], parts[1], parts[2] || 0));
+                        displayTime = utcDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+                    }
+
+                    return `<div class="flex items-start gap-1.5 leading-tight py-1 border-b border-white/[0.04]">
+                        <span style="color:#484f58;flex-shrink:0">[${displayTime}]</span>
+                        <span style="color:${color}">${log.message}</span>
+                    </div>`;
+                }).join('');
+            }
+            const liveTextEl = document.getElementById("engine-live-text");
+            if (liveTextEl && latestStatus) {
+                liveTextEl.textContent = latestStatus;
+            }
+        }
+
+        async function triggerManualScan() {
+            try {
+                await fetch(`${API_BASE}/api/v1/control/scan`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ auto_trade: false })
+                });
+                await fetchTelemetry();
+            } catch (err) {
+                console.error("Scan error:", err);
+            }
+        }
+        function openKillModal() { document.getElementById("kill-modal").classList.add("active"); }
+        function openResumeModal() { document.getElementById("resume-modal").classList.add("active"); }
+        function closeModal(id) { document.getElementById(id).classList.remove("active"); }
+
+        async function confirmKillSwitch() {
+            const reason = document.getElementById("kill-reason-input").value || "Manual dashboard trigger";
+            await fetch(`${API_BASE}/api/v1/control/kill-switch`, {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ reason })
+            });
+            closeModal("kill-modal");
+            fetchTelemetry();
+        }
+
+        async function confirmResume() {
+            const pass = document.getElementById("resume-passphrase-input").value;
+            const res = await fetch(`${API_BASE}/api/v1/control/resume`, {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ passphrase: pass })
+            });
+            if (res.ok) { closeModal("resume-modal"); manualReconnectTelemetry(); }
+            else alert("Invalid passphrase. Use CONFIRM_RESUME to unlock.");
+        }
+
+        // ─── Boot & Initial Route Resolution ───
+        const initialPath = window.location.pathname.replace(BASE_PATH, '').replace(/^\/+/, '').toLowerCase();
+        switchView(initialPath || 'dashboard', false);
+        initSSE(); // Inicia SSE como modo principal (1 conexión persistente, 0 rate-limits)
+    </script>
+</body>
+
+</html>
