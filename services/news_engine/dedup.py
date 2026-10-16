@@ -2,6 +2,8 @@
 
 Filters duplicate syndicated wire feeds, scores source credibility, and tracks
 syndication buzz counts across news releases.
+Fixed bug: Multi-symbol articles are now evaluated per-symbol without dropping
+coverage for secondary tickers when one symbol already saw a related wire.
 """
 
 import re
@@ -24,6 +26,8 @@ SOURCE_TRUST_RATINGS: Dict[str, float] = {
     "pr newswire": 1.0,
     "globenewswire": 1.0,
     "financial times": 1.0,
+    "citadel": 1.0,
+    "asml": 1.0,
 
     # Tier 2: Established Financial Outlets (0.85)
     "cnbc": 0.85,
@@ -34,6 +38,10 @@ SOURCE_TRUST_RATINGS: Dict[str, float] = {
     "investor's business daily": 0.85,
     "ibd": 0.85,
     "forbes": 0.80,
+    "morningstar": 0.85,
+    "stonex": 0.85,
+    "investing.com": 0.80,
+    "geekwire": 0.80,
 
     # Tier 3: Crowdsourced / Retail Outlets (0.65)
     "seeking alpha": 0.65,
@@ -42,6 +50,9 @@ SOURCE_TRUST_RATINGS: Dict[str, float] = {
     "yahoo finance": 0.70,
     "tipranks": 0.65,
     "zacks": 0.65,
+    "24/7 wall st": 0.70,
+    "tradingview": 0.70,
+    "tikr": 0.70,
 
     # Tier 4: Social / Unverified (0.40)
     "stocktwits": 0.40,
@@ -53,7 +64,7 @@ SOURCE_TRUST_RATINGS: Dict[str, float] = {
 STOPWORDS = {
     "a", "an", "and", "are", "as", "at", "be", "by", "for", "from",
     "has", "he", "in", "is", "it", "its", "of", "on", "that", "the",
-    "to", "was", "were", "will", "with", "the", "this", "but", "they",
+    "to", "was", "were", "will", "with", "this", "but", "they",
     "have", "had", "what", "when", "where", "who", "which", "why", "how"
 }
 
@@ -74,7 +85,7 @@ class SourceTrustRater:
 
 
 class NewsDeduplicator:
-    """Detects syndicated duplicates and aggregates news buzz."""
+    """Detects syndicated duplicates and aggregates news buzz per symbol."""
 
     def __init__(self, similarity_threshold: float = 0.60, max_cache_hours: float = 12.0):
         self.similarity_threshold = similarity_threshold
@@ -94,14 +105,10 @@ class NewsDeduplicator:
         return intersection / union if union > 0 else 0.0
 
     def process_and_deduplicate(self, article: NewsArticle) -> Optional[NewsArticle]:
-        """Checks article against recent history.
+        """Checks article against recent history per symbol.
 
-        If it is a duplicate of an existing article:
-            - Increments the syndication count of the original article.
-            - Returns None (indicating duplicate rejected).
-        If unique:
-            - Updates source trust score.
-            - Adds to cache and returns the enriched article.
+        Fixes multi-ticker drop bug: only filters out symbols where the article
+        was already registered, preserving novel symbols on multi-ticker wires.
         """
         article.source_trust_score = SourceTrustRater.get_trust_score(article.source)
         article_tokens = self._tokenize(article.headline)
@@ -110,9 +117,9 @@ class NewsDeduplicator:
         if now.tzinfo is None:
             now = now.replace(tzinfo=timezone.utc)
 
-        symbols = article.symbols if article.symbols else ["_ALL_"]
+        symbols = list(article.symbols) if article.symbols else ["_ALL_"]
+        novel_symbols: List[str] = []
 
-        # Check each symbol for duplicate
         for sym in symbols:
             if sym not in self._history:
                 self._history[sym] = []
@@ -123,18 +130,24 @@ class NewsDeduplicator:
                 if (now - (a.published_at if a.published_at.tzinfo else a.published_at.replace(tzinfo=timezone.utc))).total_seconds() <= self.max_cache_hours * 3600
             ]
 
+            is_dup_for_sym = False
             for existing in self._history[sym]:
                 existing_tokens = self._tokenize(existing.headline)
                 sim = self._jaccard_similarity(article_tokens, existing_tokens)
                 if sim >= self.similarity_threshold:
-                    # Found duplicate/syndicated wire
                     existing.syndication_count += 1
-                    return None
+                    is_dup_for_sym = True
+                    break
 
-        # Unique article -> save to symbol caches
-        for sym in symbols:
-            self._history[sym].append(article)
+            if not is_dup_for_sym:
+                novel_symbols.append(sym)
+                self._history[sym].append(article)
 
+        if not novel_symbols:
+            return None
+
+        if article.symbols:
+            article.symbols = novel_symbols
         return article
 
     def clear(self):

@@ -19,7 +19,10 @@ from __future__ import annotations
 
 from typing import Any
 
-import redis.asyncio as aioredis
+try:
+    import redis.asyncio as aioredis
+except ImportError:
+    aioredis = None  # type: ignore
 
 from core.config import get_settings
 from core.logging import get_logger
@@ -83,7 +86,7 @@ async def close_redis() -> None:
         _redis = None
 
 
-def get_redis() -> aioredis.Redis:
+def get_redis() -> Any:
     """Get the Redis client. Raises if not initialized."""
     if _redis is None:
         raise RuntimeError("Redis not initialized. Call init_redis() first.")

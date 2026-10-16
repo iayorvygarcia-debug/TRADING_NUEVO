@@ -2,11 +2,11 @@
 
 from typing import Optional
 import numpy as np
-import structlog
+from core.logging import get_logger
 from services.ml_pipeline.governance import ModelRegistry
 from services.ml_pipeline.models import PredictionResult
 
-logger = structlog.get_logger(__name__)
+logger = get_logger(__name__)
 
 
 class MLSignalPredictor:

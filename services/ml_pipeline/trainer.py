@@ -2,16 +2,23 @@
 
 import uuid
 from typing import Dict, List, Optional, Tuple
-import lightgbm as lgb
+try:
+    import lightgbm as lgb
+except ImportError:
+    lgb = None  # type: ignore
 import numpy as np
-from sklearn.calibration import CalibratedClassifierCV
-from sklearn.metrics import (
-    accuracy_score,
-    brier_score_loss,
-    log_loss,
-    precision_score,
-    roc_auc_score,
-)
+try:
+    from sklearn.calibration import CalibratedClassifierCV
+    from sklearn.metrics import (
+        accuracy_score,
+        brier_score_loss,
+        log_loss,
+        precision_score,
+        roc_auc_score,
+    )
+except ImportError:
+    CalibratedClassifierCV = None  # type: ignore
+    accuracy_score = brier_score_loss = log_loss = precision_score = roc_auc_score = None  # type: ignore
 from services.ml_pipeline.models import DatasetSplit, ModelMetadata, ModelStatus
 
 

@@ -252,9 +252,24 @@ class FeatureEngine:
         is_pinbar = any("pinbar" in p.pattern_name for p in patterns)
         is_inside_bar = any("inside_bar" in p.pattern_name for p in patterns)
 
-        # 7. Multi-Timeframe parameters
-        mtf_score = mtf_alignment.alignment_score if mtf_alignment else 0.0
-        mtf_pullback = mtf_alignment.is_pullback if mtf_alignment else False
+        # 7. Multi-Timeframe parameters (with intrinsic multi-horizon fallback when single DataFrame is passed)
+        if mtf_alignment is not None:
+            mtf_score = mtf_alignment.alignment_score
+            mtf_pullback = mtf_alignment.is_pullback
+        else:
+            st_dir = int(last_row.get("supertrend_dir", 0) if not np.isnan(last_row.get("supertrend_dir", 0)) else 0)
+            rsi_val = float(last_row.get("rsi_14", 50.0) if not np.isnan(last_row.get("rsi_14", 50.0)) else 50.0)
+            macro_bull = (ema_50_dist > 0) and (sma_200_dist >= 0)
+            macro_bear = (ema_50_dist < 0) and (sma_200_dist <= 0)
+            if macro_bull and st_dir == 1:
+                mtf_score = round(min(1.0, 0.55 + (0.25 if ema_spread > 0 else 0.0) + (0.20 if ret_20 > 0 else 0.0)), 3)
+                mtf_pullback = bool(rsi_val <= 45.0 or ret_1 < -0.5)
+            elif macro_bear and st_dir == -1:
+                mtf_score = round(max(-1.0, -0.55 - (0.25 if ema_spread < 0 else 0.0) - (0.20 if ret_20 < 0 else 0.0)), 3)
+                mtf_pullback = bool(rsi_val >= 55.0 or ret_1 > 0.5)
+            else:
+                mtf_score = 0.0
+                mtf_pullback = False
 
         # 8. Safe values / NaN fallback
         def _safe(val: Any, default: float = 0.0) -> float:

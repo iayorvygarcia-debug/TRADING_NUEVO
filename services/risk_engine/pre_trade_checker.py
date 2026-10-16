@@ -87,21 +87,21 @@ class PreTradeChecker:
             violations.append("Market is closed for regular trading hours.")
 
         # ── 4. Max Daily Loss Check ──────────────────────────────────
-        if portfolio_state.daily_pnl_pct <= -(self.settings.max_daily_loss * 100.0):
+        if not is_exit and portfolio_state.daily_pnl_pct <= -(self.settings.max_daily_loss * 100.0):
             violations.append(
                 f"Max daily loss exceeded: {portfolio_state.daily_pnl_pct:.2f}% "
                 f"<= -{self.settings.max_daily_loss * 100.0:.2f}%"
             )
 
         # ── 5. Max Drawdown Check ────────────────────────────────────
-        if portfolio_state.drawdown_pct >= (self.settings.max_drawdown * 100.0):
+        if not is_exit and portfolio_state.drawdown_pct >= (self.settings.max_drawdown * 100.0):
             violations.append(
                 f"Max drawdown limit exceeded: {portfolio_state.drawdown_pct:.2f}% "
                 f">= {self.settings.max_drawdown * 100.0:.2f}%"
             )
 
         # ── 6. Maximum Daily Trades Check ────────────────────────────
-        if portfolio_state.daily_trades_count >= self.settings.max_trades_per_day:
+        if not is_exit and portfolio_state.daily_trades_count >= self.settings.max_trades_per_day:
             violations.append(
                 f"Max daily trades limit reached: {portfolio_state.daily_trades_count} "
                 f">= {self.settings.max_trades_per_day}"
@@ -130,7 +130,7 @@ class PreTradeChecker:
             )
 
         # ── 9. Minimum Signal Score ──────────────────────────────────
-        if signal_score < self.settings.min_signal_score:
+        if not is_exit and signal_score < self.settings.min_signal_score:
             violations.append(
                 f"Signal composite score ({signal_score:.2f}) is below minimum "
                 f"threshold ({self.settings.min_signal_score:.2f})"
@@ -139,7 +139,7 @@ class PreTradeChecker:
         # ── 10. Max Sector Exposure Check ────────────────────────────
         current_sector_exp = portfolio_state.sector_exposures.get(sector, 0.0)
         projected_sector_exp = current_sector_exp + (notional / equity)
-        if projected_sector_exp > self.settings.max_sector_exposure:
+        if not is_exit and projected_sector_exp > self.settings.max_sector_exposure:
             violations.append(
                 f"Sector '{sector}' exposure would reach {projected_sector_exp * 100.0:.1f}% "
                 f"(max {self.settings.max_sector_exposure * 100.0:.1f}%)"
@@ -149,7 +149,7 @@ class PreTradeChecker:
         max_allowed_notional = equity * self.settings.max_position_size
         approved_qty = quantity
 
-        if notional > max_allowed_notional:
+        if not is_exit and notional > max_allowed_notional:
             # Scale down to maximum allowed rather than flat rejection
             approved_qty = max_allowed_notional / price
             reasons.append(

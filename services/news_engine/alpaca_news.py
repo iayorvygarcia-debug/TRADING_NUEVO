@@ -3,11 +3,11 @@
 from datetime import datetime, timezone
 from typing import List, Optional
 import httpx
-import structlog
+from core.logging import get_logger
 from core.config import get_settings
 from services.news_engine.models import NewsArticle
 
-logger = structlog.get_logger(__name__)
+logger = get_logger(__name__)
 
 
 class AlpacaNewsAdapter:

@@ -125,7 +125,7 @@ class UniverseScanner:
             return []
 
         # Rotate batch of symbols to evaluate on each cycle (5 symbols per scan)
-        batch_size = min(len(symbols), 5)
+        batch_size = min(len(symbols), 15)
         start_idx = self._batch_offset % len(symbols)
         target_syms = [symbols[(start_idx + i) % len(symbols)] for i in range(batch_size)]
         self._batch_offset = (self._batch_offset + batch_size) % len(symbols)
@@ -136,7 +136,7 @@ class UniverseScanner:
             await adapter.connect()
             for sym in target_syms:
                 try:
-                    raw_bars = await adapter.get_time_series(sym, interval="1day", outputsize=60)
+                    raw_bars = await adapter.get_time_series(sym, interval="1day", outputsize=220)
                     if raw_bars and len(raw_bars) >= FeatureEngine.MIN_BARS_REQUIRED:
                         df = pd.DataFrame(raw_bars).copy()
                         df["datetime"] = pd.to_datetime(df["datetime"])
@@ -152,6 +152,45 @@ class UniverseScanner:
             await adapter.disconnect()
         except Exception as exc:
             logger.debug("auto_scan_twelve_data_error", error=str(exc))
+
+        # Fallback to Alpaca Historical Bars if Twelve Data yielded no features for target symbols
+        missing_syms = [s for s in target_syms if self.feature_store.get(s) is None]
+        if missing_syms:
+            try:
+                from core.config import get_settings
+                settings = get_settings()
+                if settings.alpaca.validate_keys():
+                    from datetime import datetime, timedelta, timezone
+                    from alpaca.data.historical import StockHistoricalDataClient
+                    from alpaca.data.requests import StockBarsRequest
+                    from alpaca.data.timeframe import TimeFrame
+                    sec = settings.alpaca.secret_key
+                    raw_sec = sec.get_secret_value() if hasattr(sec, "get_secret_value") else str(sec)
+                    client = StockHistoricalDataClient(settings.alpaca.api_key, raw_sec)
+                    req = StockBarsRequest(
+                        symbol_or_symbols=missing_syms,
+                        timeframe=TimeFrame.Day,
+                        start=datetime.now(timezone.utc) - timedelta(days=340),
+                    )
+                    bars_resp = await asyncio.to_thread(client.get_stock_bars, req)
+                    for sym in missing_syms:
+                        sym_bars = bars_resp.data.get(sym, []) if hasattr(bars_resp, "data") else []
+                        if len(sym_bars) >= FeatureEngine.MIN_BARS_REQUIRED:
+                            df = pd.DataFrame([
+                                {
+                                    "datetime": b.timestamp,
+                                    "open": float(b.open),
+                                    "high": float(b.high),
+                                    "low": float(b.low),
+                                    "close": float(b.close),
+                                    "volume": float(b.volume),
+                                }
+                                for b in sym_bars
+                            ]).sort_values("datetime").set_index("datetime")
+                            fv = FeatureEngine.compute_features(df, symbol=sym, timeframe="1d")
+                            self.feature_store.save(fv)
+            except Exception as alp_exc:
+                logger.debug("auto_scan_alpaca_fallback_error", error=str(alp_exc))
 
         # Collect all active FeatureVectors across the symbols universe
         features_list: list[FeatureVector] = []

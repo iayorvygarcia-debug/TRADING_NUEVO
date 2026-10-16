@@ -20,7 +20,7 @@ _root_path = str(Path(__file__).resolve().parent.parent.parent)
 if _root_path not in sys.path:
     sys.path.insert(0, _root_path)
 
-import structlog
+from core.logging import get_logger
 from core.config import get_settings
 from core.market_session import (
     MarketSession,
@@ -57,7 +57,7 @@ from strategies.committee_agents import build_committee_agents
 from services.shadow_engine import ShadowTradingEngine
 
 
-logger = structlog.get_logger(__name__)
+logger = get_logger("quant_trading_worker")
 
 
 class QuantTradingWorker:
@@ -104,7 +104,7 @@ class QuantTradingWorker:
         self.signal_combiner = SignalCombiner(
             strategy_weights={agent.name: 0.10 for agent in self.committee_agents},
             min_composite_score=0.65,
-            min_consensus_ratio=0.60,
+            min_consensus_ratio=0.50,
             min_voters=2,
         )
 
@@ -597,18 +597,22 @@ class QuantTradingWorker:
             await self.broker.reconcile()
 
     async def refresh_news_scores(self, symbols: list[str]) -> dict[str, float]:
-        """Fetch and score recent news; return symbol scores for the trade gate."""
-        if self.news_adapter is None or not symbols:
+        """Fetch and score recent news via Alpaca + Gemini AI; return symbol scores for the trade gate."""
+        if not symbols:
             self.latest_news_scores = {}
             return {}
         try:
-            articles = await self.news_adapter.get_latest_news(
-                symbols=symbols[:50],
-                limit=50,
-                start=datetime.now(timezone.utc) - timedelta(hours=24),
-            )
-            for article in articles:
-                self.news_engine.process_article(article)
+            if self.news_adapter is not None:
+                articles = await self.news_adapter.get_latest_news(
+                    symbols=symbols[:50],
+                    limit=50,
+                    start=datetime.now(timezone.utc) - timedelta(hours=24),
+                )
+                for article in articles:
+                    if hasattr(self.news_engine, "process_article_async"):
+                        await self.news_engine.process_article_async(article)
+                    else:
+                        self.news_engine.process_article(article)
             scores = {
                 symbol: self.news_engine.get_symbol_sentiment(symbol).composite_news_score
                 for symbol in symbols
@@ -756,7 +760,8 @@ class QuantTradingWorker:
             }
             for c in top_candidates
         ]
-        news_scores = await self.refresh_news_scores([c.symbol for c in top_candidates])
+        tracked_news_syms = list(dict.fromkeys([c.symbol for c in top_candidates] + list(getattr(self.broker, '_positions', {}).keys())))
+        news_scores = await self.refresh_news_scores(tracked_news_syms)
 
         # If weekend, overnight, or holiday: generate and persist Opening Plan, then finish analysis cycle
         if is_weekend_or_overnight:
@@ -875,10 +880,12 @@ class QuantTradingWorker:
                 direction = SignalDirection.BUY if candidate.direction == "bullish" else SignalDirection.SELL
                 norm_score = min(1.0, max(0.0, candidate.composite_score / 100.0))
 
-                # ── 6. Run the ten-agent committee ─────────────────────────
-                # Agents emit signals only. The combiner is the sole decision
-                # point; disagreement or insufficient consensus means NO TRADE.
+                # ── 6. Run the ten-agent committee (enriched with News & Gemini features) ──
                 features_dict = candidate.features.to_dict()
+                if hasattr(self.news_engine, "to_feature_dict"):
+                    features_dict.update(self.news_engine.to_feature_dict(sym))
+                else:
+                    features_dict["news_composite_score"] = news_score
                 market_regime = getattr(self.regime_manager, "current_regime", None)
                 try:
                     strategy_signals = await asyncio.gather(*(
@@ -886,7 +893,9 @@ class QuantTradingWorker:
                         for agent in self.committee_agents
                     ))
                     valid_signals = [s for s in strategy_signals if s is not None]
-                    ensemble = self.signal_combiner.combine(sym, valid_signals, market_regime)
+                    ensemble = self.signal_combiner.combine(
+                        sym, valid_signals, market_regime, news_composite_score=news_score
+                    )
 
                     if valid_signals and ensemble.is_approved and ensemble.direction == direction:
                         # Strategy ensemble confirmed the scanner's directional bias → use ensemble
@@ -941,9 +950,11 @@ class QuantTradingWorker:
                 # 6.5. Pre-Trade Risk Guard (Multidimensional Gatekeeper)
                 fv = self.scanner.feature_store.get(sym)
                 natr = getattr(fv, "natr_14", None) if fv else None
-                # Previous close derived from 1-bar return (close / (1 + ret_1%)) so the gap engine sees a real gap
+                # Use true overnight/intraday reference close when available; during regular session
+                # dampen full daily bar return so strong trend/breakout candles are not misclassified as adverse gaps
                 ret_1 = getattr(candidate.features, "return_1", 0.0) or 0.0
-                prev_c = current_price / (1.0 + ret_1 / 100.0) if (1.0 + ret_1 / 100.0) > 0 else current_price
+                effective_gap_ret = ret_1 if is_extended_session else (ret_1 * 0.35)
+                prev_c = current_price / (1.0 + effective_gap_ret / 100.0) if (1.0 + effective_gap_ret / 100.0) > 0 else current_price
 
                 guard_res = self.pre_trade_guard.evaluate_order_proposal(
                     symbol=sym,
@@ -1215,8 +1226,14 @@ class QuantTradingWorker:
                         except Exception as stop_err:
                             logger.error("broker_stop_placement_error", symbol=p_sym, error=str(stop_err))
 
-                    # 4. SALIDA POR REVERSIÓN DE TENDENCIA (Signal Reversal Exit):
-                    # Si el análisis técnico diario se volteó totalmente en contra, cerrar antes de agotar el Stop Loss.
+                    # 4. SALIDA POR REVERSIÓN DE TENDENCIA, COMITÉ DE 10 AGENTES O SHOCK DE NOTICIAS/GEMINI:
+                    if not close_reason:
+                        pos_news_score = self.latest_news_scores.get(p_sym, 0.0)
+                        if is_long and pos_news_score <= -45.0:
+                            close_reason = f"📰 SALIDA POR NOTICIA ADVERSA / GEMINI: {p_sym} LONG cerrado por catalizador bajista severo (score {pos_news_score:+.1f})."
+                        elif not is_long and pos_news_score >= 45.0:
+                            close_reason = f"📰 SALIDA POR NOTICIA ALCISTA / GEMINI: {p_sym} SHORT cerrado por catalizador alcista severo (score {pos_news_score:+.1f})."
+
                     if not close_reason:
                         fv = self.scanner.feature_store.get(p_sym)
                         if fv:
@@ -1226,6 +1243,27 @@ class QuantTradingWorker:
                                 close_reason = f"🔄 REVERSIÓN TÉCNICA: {p_sym} LONG cerrado por cambio a tendencia bajista diaria (Supertrend -1)."
                             elif not is_long and st_dir == 1 and ema_spread > 0:
                                 close_reason = f"🔄 REVERSIÓN TÉCNICA: {p_sym} SHORT cerrado por cambio a tendencia alcista diaria (Supertrend +1)."
+                            else:
+                                # Evaluar si el Comité de 10 Agentes giró fuertemente en dirección opuesta a la posición abierta
+                                try:
+                                    pos_f_dict = fv.to_dict()
+                                    if hasattr(self.news_engine, "to_feature_dict"):
+                                        pos_f_dict.update(self.news_engine.to_feature_dict(p_sym))
+                                    pos_signals = await asyncio.gather(*(
+                                        ag.analyze(p_sym, pos_f_dict, getattr(self.regime_manager, "current_regime", None))
+                                        for ag in self.committee_agents
+                                    ))
+                                    valid_pos_sigs = [s for s in pos_signals if s is not None]
+                                    pos_ens = self.signal_combiner.combine(
+                                        p_sym, valid_pos_sigs, news_composite_score=self.latest_news_scores.get(p_sym, 0.0)
+                                    )
+                                    if pos_ens.is_approved:
+                                        if is_long and pos_ens.direction.value == "sell":
+                                            close_reason = f"🤖 SALIDA POR COMITÉ 10 AGENTES: {p_sym} LONG cerrado por consenso de VENTA ({len(pos_ens.contributing_strategies)} agentes, score {pos_ens.composite_score:.2f})."
+                                        elif not is_long and pos_ens.direction.value == "buy":
+                                            close_reason = f"🤖 SALIDA POR COMITÉ 10 AGENTES: {p_sym} SHORT cerrado por consenso de COMPRA ({len(pos_ens.contributing_strategies)} agentes, score {pos_ens.composite_score:.2f})."
+                                except Exception:
+                                    pass
 
                     # 5. SALIDA POR MADUREZ DE SWING / OPERACIÓN ESTANCADA:
                     # a) Si lleva 5 o más días de mercado y ya acumuló ganancia sólida (>= +1.5%), cerrar y asegurar beneficios!

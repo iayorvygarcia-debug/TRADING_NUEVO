@@ -30,23 +30,31 @@ from services.broker_engine.base import (
     OrderType,
     Position,
 )
-from alpaca.trading.client import TradingClient
-from alpaca.trading.requests import (
-    MarketOrderRequest,
-    LimitOrderRequest,
-    StopOrderRequest,
-    TakeProfitRequest,
-    StopLossRequest,
-    GetOrdersRequest,
-)
-from alpaca.trading.enums import (
-    OrderSide as AlpacaOrderSide,
-    TimeInForce as AlpacaTimeInForce,
-    OrderClass as AlpacaOrderClass,
-    QueryOrderStatus,
-    OrderStatus as AlpacaOrderStatus,
-)
-from alpaca.common.exceptions import APIError
+try:
+    from alpaca.trading.client import TradingClient
+    from alpaca.trading.requests import (
+        MarketOrderRequest,
+        LimitOrderRequest,
+        StopOrderRequest,
+        TakeProfitRequest,
+        StopLossRequest,
+        GetOrdersRequest,
+    )
+    from alpaca.trading.enums import (
+        OrderSide as AlpacaOrderSide,
+        TimeInForce as AlpacaTimeInForce,
+        OrderClass as AlpacaOrderClass,
+        QueryOrderStatus,
+        OrderStatus as AlpacaOrderStatus,
+    )
+    from alpaca.common.exceptions import APIError
+    _HAS_ALPACA_SDK = True
+except ImportError:
+    TradingClient = None  # type: ignore
+    MarketOrderRequest = LimitOrderRequest = StopOrderRequest = TakeProfitRequest = StopLossRequest = GetOrdersRequest = None  # type: ignore
+    AlpacaOrderSide = AlpacaTimeInForce = AlpacaOrderClass = QueryOrderStatus = AlpacaOrderStatus = None  # type: ignore
+    APIError = Exception  # type: ignore
+    _HAS_ALPACA_SDK = False
 
 logger = get_logger("alpaca_broker")
 
@@ -93,7 +101,7 @@ class AlpacaBroker(BrokerInterface):
             api_key=self.api_key,
             secret_key=self.secret_key,
             paper=self._is_paper,
-        )
+        ) if TradingClient is not None else None
         self._connected: bool = False
         self.cash: float = 100000.0
         self.equity: float = 100000.0

@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 
 class NewsCatalystType(str, Enum):
-    """High-impact quantitative catalyst events."""
+    """High-impact quantitative catalyst events (including 2026 AI & macro drivers)."""
     EARNINGS_BEAT = "EARNINGS_BEAT"
     EARNINGS_MISS = "EARNINGS_MISS"
     GUIDANCE_RAISE = "GUIDANCE_RAISE"
@@ -21,6 +21,11 @@ class NewsCatalystType(str, Enum):
     DIVIDEND_CUT = "DIVIDEND_CUT"
     LEGAL_REGULATORY_PROBE = "LEGAL_REGULATORY_PROBE"
     PATENT_INNOVATION = "PATENT_INNOVATION"
+    AI_CHIP_CYCLE = "AI_CHIP_CYCLE"
+    EXPORT_CONTROL_TARIFF = "EXPORT_CONTROL_TARIFF"
+    SECTOR_ROTATION = "SECTOR_ROTATION"
+    SELL_THE_NEWS_DIVERGENCE = "SELL_THE_NEWS_DIVERGENCE"
+    EARNINGS_REVISION = "EARNINGS_REVISION"
     GENERAL_FINANCIAL = "GENERAL_FINANCIAL"
 
 
@@ -42,13 +47,15 @@ class NewsArticle(BaseModel):
     url: Optional[str] = None
     symbols: list[str] = Field(default_factory=list)
     published_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    
+
     # NLP & Quantitative Sentiment Attributes
     sentiment_score: Optional[float] = Field(None, ge=-1.0, le=1.0, description="Sentiment polarity (-1.0 to +1.0)")
     sentiment_confidence: Optional[float] = Field(None, ge=0.0, le=1.0, description="Model confidence (0.0 to 1.0)")
     source_trust_score: float = Field(default=1.0, ge=0.0, le=1.0, description="Reputational trust factor of source")
     catalysts: list[NewsCatalyst] = Field(default_factory=list, description="Extracted high-impact catalysts")
-    
+    is_sell_the_news: bool = Field(default=False, description="True if positive report met with adverse guidance/price reaction")
+    recommended_action: str = Field(default="HOLD", description="Trading bias derived from Gemini/NLP engine")
+
     # Syndication Tracking
     syndication_count: int = Field(default=1, description="Number of duplicate/syndicated wire reports")
 

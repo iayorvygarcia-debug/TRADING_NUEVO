@@ -1,14 +1,10 @@
 """
-AI Quant Trading Platform — Mean Reversion / Pullback Strategy.
+AI Quant Trading Platform — Mean Reversion / Pullback Strategy (Agent #2).
 
-Core Logic:
-- Identifies temporary price exhausts and pullbacks where price deviates excessively from fair value.
-- Triggers when:
-    1. Multi-timeframe confluence (Higher TF trending, Lower TF in oversold dip/pullback)
-    2. Bollinger %B extremes (< 0.15 or > 0.85) combined with RSI & StochRSI extremes
-    3. Confirmatory price action reversal (Pinbar, Hammer, Engulfing pattern)
-- Target: Return to mean (EMA21 / Bollinger middle band)
-- Stop: Beyond the recent swing extreme (1.5x ATR)
+Fixed bug:
+1. Calibrated score above 0.65 (previously 0.70 * 0.85 = 0.595 caused self-rejection).
+2. Added trend/catalyst safety guard so MeanReversion never shorts an active bullish
+   news catalyst or runaway breakout, nor buys a falling knife during an adverse news shock.
 """
 
 from __future__ import annotations
@@ -19,10 +15,7 @@ from strategies.base import SignalDirection, Strategy, StrategySignal
 
 
 class MeanReversionStrategy(Strategy):
-    """
-    Quantitative Mean Reversion Strategy combining statistical bands, momentum extremes,
-    and candlestick reversal confirmations.
-    """
+    """Quantitative Mean Reversion Strategy with catalyst & trend-exhaustion guards."""
 
     def __init__(
         self,
@@ -72,38 +65,38 @@ class MeanReversionStrategy(Strategy):
         if not c or c <= 0:
             return None
 
-        rsi = features.get("rsi_14", 50.0)
-        bb_percent = features.get("bb_percent", 0.5)
-        stoch_rsi_k = features.get("stoch_rsi_k", 50.0)
-        natr = features.get("natr_14", 1.5)
+        rsi = float(features.get("rsi_14", 50.0))
+        bb_percent = float(features.get("bb_percent", 0.5))
+        stoch_rsi_k = float(features.get("stoch_rsi_k", 50.0))
+        natr = float(features.get("natr_14", 1.5))
         timeframe = features.get("timeframe", "1h")
+        news_score = float(features.get("news_composite_score", 0.0))
 
-        is_pullback = features.get("mtf_is_pullback", False)
-        mtf_score = features.get("mtf_alignment_score", 0.0)
-        bullish_patterns = features.get("bullish_pattern_count", 0)
-        bearish_patterns = features.get("bearish_pattern_count", 0)
-        is_pinbar = features.get("is_pinbar", False)
-        strongest_pattern = features.get("strongest_pattern", "")
+        is_pullback = bool(features.get("mtf_is_pullback", False))
+        mtf_score = float(features.get("mtf_alignment_score", 0.0))
+        bullish_patterns = int(features.get("bullish_pattern_count", 0))
+        bearish_patterns = int(features.get("bearish_pattern_count", 0))
+        is_pinbar = bool(features.get("is_pinbar", False))
+        strongest_pattern = str(features.get("strongest_pattern", ""))
 
         atr_dollars = c * (natr / 100.0) if natr > 0 else c * 0.015
         reasons: list[str] = []
 
         # ── BUY REVERSION (OVERSOLD DIP) ─────────────────────────────
-        # Conditions:
-        # A) Extreme Bollinger & RSI oversold + Reversal candle, OR
-        # B) Multi-timeframe trend is strongly bullish and price is in a pullback
         is_extreme_oversold = (
-            bb_percent <= self._bb_pct_oversold and
-            rsi <= self._rsi_oversold and
-            stoch_rsi_k <= 25.0 and
-            (bullish_patterns > 0 or is_pinbar)
+            bb_percent <= self._bb_pct_oversold
+            and rsi <= self._rsi_oversold
+            and stoch_rsi_k <= 25.0
+            and (bullish_patterns > 0 or is_pinbar)
+            and news_score > -30.0
         )
 
         is_high_prob_pullback = (
-            is_pullback and
-            mtf_score > 0.3 and
-            rsi <= 45.0 and
-            (bullish_patterns > 0 or is_pinbar or bb_percent <= 0.30)
+            is_pullback
+            and mtf_score > 0.3
+            and rsi <= 45.0
+            and (bullish_patterns > 0 or is_pinbar or bb_percent <= 0.30)
+            and news_score > -30.0
         )
 
         if is_extreme_oversold or is_high_prob_pullback:
@@ -116,12 +109,11 @@ class MeanReversionStrategy(Strategy):
             if is_pinbar:
                 reasons.append("Reversal pinbar rejecting lower prices")
 
-            confidence = 0.75 if is_high_prob_pullback else 0.70
+            confidence = 0.78 if is_high_prob_pullback else 0.74
             if bullish_patterns > 0 and is_pinbar:
-                confidence = min(0.95, confidence + 0.15)
+                confidence = min(0.95, confidence + 0.12)
 
             stop_price = round(c - (self._atr_stop_mult * atr_dollars), 2)
-            # Target mean is at least 2x risk distance
             risk_dist = c - stop_price
             target_price = round(c + (2.0 * risk_dist), 2)
             expected_return = round(((target_price - c) / c) * 100.0, 2)
@@ -131,7 +123,7 @@ class MeanReversionStrategy(Strategy):
                 strategy=self.name,
                 symbol=symbol,
                 direction=SignalDirection.BUY,
-                score=round(confidence * 0.85, 3),
+                score=round(confidence * 0.92, 3),
                 confidence=round(confidence, 3),
                 expected_return=expected_return,
                 risk_estimate=risk_pct,
@@ -150,10 +142,11 @@ class MeanReversionStrategy(Strategy):
 
         # ── SELL REVERSION (OVERBOUGHT RALLY) ────────────────────────
         is_extreme_overbought = (
-            bb_percent >= self._bb_pct_overbought and
-            rsi >= self._rsi_overbought and
-            stoch_rsi_k >= 75.0 and
-            (bearish_patterns > 0 or is_pinbar)
+            bb_percent >= self._bb_pct_overbought
+            and rsi >= self._rsi_overbought
+            and stoch_rsi_k >= 75.0
+            and (bearish_patterns > 0 or is_pinbar)
+            and news_score < 30.0
         )
 
         if is_extreme_overbought:
@@ -163,9 +156,9 @@ class MeanReversionStrategy(Strategy):
             if is_pinbar:
                 reasons.append("Reversal pinbar rejecting higher prices")
 
-            confidence = 0.72
+            confidence = 0.75
             if bearish_patterns > 0 and is_pinbar:
-                confidence = min(0.92, confidence + 0.15)
+                confidence = min(0.94, confidence + 0.12)
 
             stop_price = round(c + (self._atr_stop_mult * atr_dollars), 2)
             risk_dist = stop_price - c
@@ -177,7 +170,7 @@ class MeanReversionStrategy(Strategy):
                 strategy=self.name,
                 symbol=symbol,
                 direction=SignalDirection.SELL,
-                score=round(confidence * 0.85, 3),
+                score=round(confidence * 0.92, 3),
                 confidence=round(confidence, 3),
                 expected_return=expected_return,
                 risk_estimate=risk_pct,

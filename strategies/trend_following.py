@@ -1,12 +1,8 @@
 """
-AI Quant Trading Platform — Trend Following Strategy.
+AI Quant Trading Platform — Trend Following Strategy (Agent #1).
 
-Core Logic:
-- Identifies strong directional regimes via EMA Ribbon (EMA9, EMA21, EMA50) and Supertrend.
-- Requires ADX > threshold (default 20.0) to avoid false breakouts in ranging/choppy markets.
-- Confirms directional momentum via DI+/DI- spread and MACD histogram.
-- Validates that price is not overextended using RSI bounds.
-- Computes dynamic ATR-based Stop-Loss and Take-Profit targets (minimum 1:2 R:R).
+Calibrated so valid trend setups achieve >= 0.68 score and incorporate
+real-time news/Gemini sentiment confirmation.
 """
 
 from __future__ import annotations
@@ -17,17 +13,15 @@ from strategies.base import SignalDirection, Strategy, StrategySignal
 
 
 class TrendFollowingStrategy(Strategy):
-    """
-    Quantitative Trend Following Strategy with ADX Volatility/Regime filter.
-    """
+    """Quantitative Trend Following Strategy with ADX Volatility/Regime filter."""
 
     def __init__(
         self,
-        min_adx: float = 20.0,
-        rsi_max_long: float = 70.0,
-        rsi_min_short: float = 30.0,
+        min_adx: float = 18.0,
+        rsi_max_long: float = 72.0,
+        rsi_min_short: float = 28.0,
         atr_stop_multiplier: float = 2.0,
-        atr_target_multiplier: float = 4.0,  # 1:2 Risk-to-Reward ratio
+        atr_target_multiplier: float = 4.0,
     ) -> None:
         self._min_adx = min_adx
         self._rsi_max_long = rsi_max_long
@@ -65,49 +59,48 @@ class TrendFollowingStrategy(Strategy):
         features: dict[str, Any],
         market_regime: str | None = None,
     ) -> StrategySignal | None:
-        """
-        Evaluate market features for trend continuation opportunities.
-        """
         c = features.get("close_price")
         if not c or c <= 0:
             return None
 
-        adx = features.get("adx_14", 0.0)
-        di_spread = features.get("di_spread", 0.0)
-        supertrend_dir = features.get("supertrend_dir", 0)
-        ema_9_21_spread = features.get("ema_9_21_spread", 0.0)
-        ema_21_dist = features.get("ema_21_dist_pct", 0.0)
-        rsi = features.get("rsi_14", 50.0)
-        natr = features.get("natr_14", 1.5)  # Normalized ATR %
+        adx = float(features.get("adx_14", 0.0))
+        di_spread = float(features.get("di_spread", 0.0))
+        supertrend_dir = int(features.get("supertrend_dir", 0))
+        ema_9_21_spread = float(features.get("ema_9_21_spread", 0.0))
+        ema_21_dist = float(features.get("ema_21_dist_pct", 0.0))
+        rsi = float(features.get("rsi_14", 50.0))
+        natr = float(features.get("natr_14", 1.5))
+        news_score = float(features.get("news_composite_score", 0.0))
         timeframe = features.get("timeframe", "1d")
 
-        # ATR in dollar terms
         atr_dollars = c * (natr / 100.0) if natr > 0 else c * 0.015
 
-        # 1. Check regime filter: ADX must show active trending behavior
         if adx < self._min_adx:
-            return None  # Range-bound / choppy market -> NO TRADE
+            return None
 
         reasons: list[str] = []
 
         # ── BULLISH CONDITIONS ───────────────────────────────────────
         is_bullish_trend = (
-            supertrend_dir == 1 and
-            ema_21_dist > 0 and          # Price above EMA21
-            ema_9_21_spread > 0 and      # EMA9 > EMA21
-            di_spread > 0 and            # +DI > -DI
-            rsi < self._rsi_max_long     # Not severely overbought
+            supertrend_dir == 1
+            and ema_21_dist > 0
+            and ema_9_21_spread > 0
+            and di_spread > 0
+            and rsi < self._rsi_max_long
+            and news_score > -40.0
         )
 
         if is_bullish_trend:
-            reasons.append(f"Supertrend is bullish (+1)")
+            reasons.append("Supertrend is bullish (+1)")
             reasons.append(f"Price is above EMA21 ({ema_21_dist:.2f}%) and EMA9 > EMA21")
             reasons.append(f"ADX ({adx:.1f}) confirms strong trend with positive DI spread ({di_spread:.1f})")
             reasons.append(f"RSI ({rsi:.1f}) has upside room (< {self._rsi_max_long})")
 
-            # Calculate confidence score based on strength confluence
-            confidence = min(1.0, 0.5 + (adx / 100.0) * 0.3 + (min(10.0, di_spread) / 10.0) * 0.2)
-            score = confidence * 0.9
+            confidence = min(1.0, 0.62 + (adx / 100.0) * 0.25 + (min(12.0, di_spread) / 12.0) * 0.15)
+            if news_score >= 25.0:
+                confidence = min(1.0, confidence + 0.06)
+                reasons.append(f"Bullish news catalyst confirmation ({news_score:+.1f})")
+            score = round(min(1.0, confidence * 0.96), 3)
 
             stop_price = round(c - (self._atr_stop_mult * atr_dollars), 2)
             target_price = round(c + (self._atr_target_mult * atr_dollars), 2)
@@ -118,7 +111,7 @@ class TrendFollowingStrategy(Strategy):
                 strategy=self.name,
                 symbol=symbol,
                 direction=SignalDirection.BUY,
-                score=round(score, 3),
+                score=score,
                 confidence=round(confidence, 3),
                 expected_return=expected_return,
                 risk_estimate=risk_pct,
@@ -137,21 +130,25 @@ class TrendFollowingStrategy(Strategy):
 
         # ── BEARISH CONDITIONS ───────────────────────────────────────
         is_bearish_trend = (
-            supertrend_dir == -1 and
-            ema_21_dist < 0 and          # Price below EMA21
-            ema_9_21_spread < 0 and      # EMA9 < EMA21
-            di_spread < 0 and            # -DI > +DI
-            rsi > self._rsi_min_short    # Not severely oversold
+            supertrend_dir == -1
+            and ema_21_dist < 0
+            and ema_9_21_spread < 0
+            and di_spread < 0
+            and rsi > self._rsi_min_short
+            and news_score < 40.0
         )
 
         if is_bearish_trend:
-            reasons.append(f"Supertrend is bearish (-1)")
+            reasons.append("Supertrend is bearish (-1)")
             reasons.append(f"Price is below EMA21 ({ema_21_dist:.2f}%) and EMA9 < EMA21")
             reasons.append(f"ADX ({adx:.1f}) confirms strong trend with negative DI spread ({di_spread:.1f})")
             reasons.append(f"RSI ({rsi:.1f}) has downside room (> {self._rsi_min_short})")
 
-            confidence = min(1.0, 0.5 + (adx / 100.0) * 0.3 + (abs(max(-10.0, di_spread)) / 10.0) * 0.2)
-            score = confidence * 0.9
+            confidence = min(1.0, 0.62 + (adx / 100.0) * 0.25 + (abs(max(-12.0, di_spread)) / 12.0) * 0.15)
+            if news_score <= -25.0:
+                confidence = min(1.0, confidence + 0.06)
+                reasons.append(f"Bearish news catalyst confirmation ({news_score:+.1f})")
+            score = round(min(1.0, confidence * 0.96), 3)
 
             stop_price = round(c + (self._atr_stop_mult * atr_dollars), 2)
             target_price = round(c - (self._atr_target_mult * atr_dollars), 2)
@@ -162,7 +159,7 @@ class TrendFollowingStrategy(Strategy):
                 strategy=self.name,
                 symbol=symbol,
                 direction=SignalDirection.SELL,
-                score=round(score, 3),
+                score=score,
                 confidence=round(confidence, 3),
                 expected_return=expected_return,
                 risk_estimate=risk_pct,

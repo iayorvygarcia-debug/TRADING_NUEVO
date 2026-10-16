@@ -158,7 +158,7 @@ class ExecutionEngine:
             settings = getattr(self, "settings", None) or get_settings()
             account_equity = float(account.equity) if (account and getattr(account, "equity", 0) > 0) else float(settings.risk.initial_capital)
             max_pos_size_pct = float(getattr(settings.risk, "max_position_size", 0.05))  # 5% max per position ($5,000 on $100k)
-            risk_pct = float(getattr(settings.risk, "risk_per_trade_pct", 0.01))         # 1% risk per trade ($1,000 on $100k)
+            risk_pct = float(getattr(settings.risk, "risk_per_trade", getattr(settings.risk, "risk_per_trade_pct", 0.01)))         # 1% risk per trade ($1,000 on $100k)
 
             # Build session-aware PortfolioRiskState with true daily starting & peak equity
             if hasattr(self.risk_engine, "get_or_create_portfolio_state"):

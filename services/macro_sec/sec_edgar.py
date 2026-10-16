@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 import httpx
-import structlog
+from core.logging import get_logger
 from core.config import get_settings
 from services.macro_sec.models import (
     FilingType,
@@ -11,7 +11,7 @@ from services.macro_sec.models import (
     SECCompanyFiling,
 )
 
-logger = structlog.get_logger(__name__)
+logger = get_logger(__name__)
 
 # Pre-indexed CIK dictionary for major US tickers to avoid extra network latency
 KNOWN_CIK_MAPPING: Dict[str, str] = {

@@ -2,10 +2,10 @@
 
 from typing import Dict, List, Optional, Tuple
 import numpy as np
-import structlog
+from core.logging import get_logger
 from services.ml_pipeline.models import DriftReport, ModelMetadata, ModelStatus
 
-logger = structlog.get_logger(__name__)
+logger = get_logger(__name__)
 
 
 class ModelRegistry:
