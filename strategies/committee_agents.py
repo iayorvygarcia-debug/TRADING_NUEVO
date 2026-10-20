@@ -1,13 +1,4 @@
-"""10 Super-Agents Committee — News-Aware & Regime-Adaptive Multi-Agent System.
-
-Each agent analyzes the market feature vector + real-time News/Gemini sentiment
-through a distinct quantitative lens (Momentum, Institutional Volume Flow,
-Macro/Trend Regime, VWAP & Catalyst Guard, Volatility Squeeze Breakout).
-
-Safety Invariant:
-Agents produce typed `StrategySignal` objects ONLY. They never access the broker
-or bypass `PreTradeRiskGuard` / `RiskEngine`.
-"""
+"""10 Super-Agents Committee — News-Aware & Regime-Adaptive Multi-Agent System."""
 from __future__ import annotations
 
 from typing import Any, Callable
@@ -55,7 +46,6 @@ class FeatureRuleAgent(Strategy):
         if price <= 0:
             return None
 
-        # Incorporate real-time News / Gemini Catalyst alignment boost
         news_score = float(features.get("news_composite_score", 0.0))
         is_buy = direction == SignalDirection.BUY
         if is_buy and news_score >= 25.0:
@@ -97,141 +87,79 @@ class FeatureRuleAgent(Strategy):
 
 
 def _momentum_rule(f: dict[str, Any]) -> tuple[SignalDirection, float, list[str]]:
-    """Agent #6: Momentum & News Velocity Confirmation (RSI + MACD + ROC + Catalyst)."""
     rsi = float(f.get("rsi_14", 50.0))
     macd = float(f.get("macd_hist_norm", 0.0))
     roc = float(f.get("roc_10", 0.0))
     news_score = float(f.get("news_composite_score", 0.0))
-
-    # Standard momentum alignment
     if 50 <= rsi <= 72 and (macd > 0.03 or roc > 0.8):
-        base_score = 0.74 + min(0.12, max(0.0, macd) * 0.4)
-        return SignalDirection.BUY, base_score, [f"Momentum aligned BUY: RSI {rsi:.1f}, MACD {macd:+.3f}"]
+        return SignalDirection.BUY, 0.74 + min(0.12, max(0.0, macd) * 0.4), [f"Momentum aligned BUY: RSI {rsi:.1f}, MACD {macd:+.3f}"]
     if 28 <= rsi <= 50 and (macd < -0.03 or roc < -0.8):
-        base_score = 0.74 + min(0.12, abs(min(0.0, macd)) * 0.4)
-        return SignalDirection.SELL, base_score, [f"Momentum aligned SELL: RSI {rsi:.1f}, MACD {macd:+.3f}"]
-
-    # News-driven momentum ignition (when a fresh catalyst ignites price before RSI overheats)
+        return SignalDirection.SELL, 0.74 + min(0.12, abs(min(0.0, macd)) * 0.4), [f"Momentum aligned SELL: RSI {rsi:.1f}, MACD {macd:+.3f}"]
     if news_score >= 35.0 and rsi >= 48.0 and macd >= 0.0:
-        return SignalDirection.BUY, 0.76, [f"Catalyst momentum ignition BUY: News {news_score:+.1f}, RSI {rsi:.1f}"]
+        return SignalDirection.BUY, 0.76, [f"Catalyst momentum ignition BUY: News {news_score:+.1f}"]
     if news_score <= -35.0 and rsi <= 52.0 and macd <= 0.0:
-        return SignalDirection.SELL, 0.76, [f"Catalyst momentum breakdown SELL: News {news_score:+.1f}, RSI {rsi:.1f}"]
-
+        return SignalDirection.SELL, 0.76, [f"Catalyst momentum breakdown SELL: News {news_score:+.1f}"]
     return SignalDirection.HOLD, 0.0, []
 
 
 def _volume_rule(f: dict[str, Any]) -> tuple[SignalDirection, float, list[str]]:
-    """Agent #7: Institutional Volume & Money Flow (RVOL + CMF + MFI + News Buzz)."""
     rvol = float(f.get("rvol_20", 0.0))
     cmf = float(f.get("cmf_20", 0.0))
     mfi = float(f.get("mfi_14", 50.0))
-    buzz = float(f.get("news_buzz_ratio", 1.0))
     news_score = float(f.get("news_composite_score", 0.0))
-
     if rvol >= 1.25 and (cmf >= 0.08 or (mfi >= 55.0 and news_score >= 25.0)):
-        score = min(0.92, 0.68 + max(0.05, cmf) + (0.04 if buzz >= 2.0 else 0.0))
-        return SignalDirection.BUY, score, [f"Volume-flow accumulation: RVOL {rvol:.2f}x, CMF {cmf:.2f}"]
+        return SignalDirection.BUY, min(0.92, 0.68 + max(0.05, cmf)), [f"Volume-flow accumulation: RVOL {rvol:.2f}x, CMF {cmf:.2f}"]
     if rvol >= 1.25 and (cmf <= -0.08 or (mfi <= 45.0 and news_score <= -25.0)):
-        score = min(0.92, 0.68 + max(0.05, abs(cmf)) + (0.04 if buzz >= 2.0 else 0.0))
-        return SignalDirection.SELL, score, [f"Volume-flow distribution: RVOL {rvol:.2f}x, CMF {cmf:.2f}"]
+        return SignalDirection.SELL, min(0.92, 0.68 + max(0.05, abs(cmf))), [f"Volume-flow distribution: RVOL {rvol:.2f}x, CMF {cmf:.2f}"]
     return SignalDirection.HOLD, 0.0, []
 
 
 def _regime_rule(f: dict[str, Any]) -> tuple[SignalDirection, float, list[str]]:
-    """Agent #8: Structural Regime & Trend Classifier (ADX + Supertrend + EMA Ribbon)."""
     adx = float(f.get("adx_14", 0.0))
     supertrend = int(f.get("supertrend_dir", 0))
     ema_spread = float(f.get("ema_9_21_spread", 0.0))
     news_score = float(f.get("news_composite_score", 0.0))
-
-    # Do not enter long into a catastrophic bearish news event or short into an explosive bullish catalyst
     if adx >= 18 and supertrend == 1 and news_score > -40.0:
-        score = min(0.90, 0.68 + adx / 200.0 + (0.04 if ema_spread > 0 else 0.0))
-        return SignalDirection.BUY, score, [f"Trend regime bullish: ADX {adx:.1f}, Supertrend +1"]
+        return SignalDirection.BUY, min(0.90, 0.68 + adx / 200.0 + (0.04 if ema_spread > 0 else 0.0)), [f"Trend regime bullish: ADX {adx:.1f}"]
     if adx >= 18 and supertrend == -1 and news_score < 40.0:
-        score = min(0.90, 0.68 + adx / 200.0 + (0.04 if ema_spread < 0 else 0.0))
-        return SignalDirection.SELL, score, [f"Trend regime bearish: ADX {adx:.1f}, Supertrend -1"]
+        return SignalDirection.SELL, min(0.90, 0.68 + adx / 200.0 + (0.04 if ema_spread < 0 else 0.0)), [f"Trend regime bearish: ADX {adx:.1f}"]
     return SignalDirection.HOLD, 0.0, []
 
 
 def _vwap_rule(f: dict[str, Any]) -> tuple[SignalDirection, float, list[str]]:
-    """Agent #9: VWAP Reversion & News Catalyst Guard.
-
-    Fixes the critical conflict bug where VWAP reversion blindly shorted strong
-    bullish breakouts (`supertrend_dir == 1` and `adx >= 24`) and killed committee consensus.
-    Now acts as:
-    1) A high-conviction News Catalyst & Pullback buyer/seller when trend/news are strong.
-    2) A pure VWAP exhaustion mean-reversion agent ONLY in non-runaway regimes.
-    """
     dist = float(f.get("vwap_dist_pct", 0.0))
     rsi = float(f.get("rsi_14", 50.0))
     adx = float(f.get("adx_14", 0.0))
     supertrend = int(f.get("supertrend_dir", 0))
     news_score = float(f.get("news_composite_score", 0.0))
-    bull_cats = float(f.get("news_bullish_catalyst_count", 0.0))
-    bear_cats = float(f.get("news_bearish_catalyst_count", 0.0))
-
-    # 1. Strong News Catalyst Ignition (trades WITH the catalyst)
-    if (news_score >= 30.0 or bull_cats >= 1.0) and rsi < 75.0 and supertrend >= 0:
-        return (
-            SignalDirection.BUY,
-            0.78,
-            [f"Catalyst/VWAP institutional BUY: News score {news_score:+.1f} ({int(bull_cats)} bullish catalysts)"],
-        )
-    if (news_score <= -30.0 or bear_cats >= 1.0) and rsi > 25.0 and supertrend <= 0:
-        return (
-            SignalDirection.SELL,
-            0.78,
-            [f"Catalyst/VWAP institutional SELL: News score {news_score:+.1f} ({int(bear_cats)} bearish catalysts)"],
-        )
-
-    # 2. Pure VWAP Reversion (only when NOT fighting a strong runaway trend)
+    if news_score >= 30.0 and rsi < 75.0 and supertrend >= 0:
+        return SignalDirection.BUY, 0.78, [f"Catalyst/VWAP institutional BUY: News score {news_score:+.1f}"]
+    if news_score <= -30.0 and rsi > 25.0 and supertrend <= 0:
+        return SignalDirection.SELL, 0.78, [f"Catalyst/VWAP institutional SELL: News score {news_score:+.1f}"]
     is_strong_uptrend = supertrend == 1 and adx >= 25.0
     is_strong_downtrend = supertrend == -1 and adx >= 25.0
-
     if dist <= -1.2 and rsi <= 40 and not is_strong_downtrend and news_score > -25.0:
-        return (
-            SignalDirection.BUY,
-            0.70,
-            [f"VWAP discount reversion BUY: distance {dist:.2f}% and RSI {rsi:.1f}"],
-        )
+        return SignalDirection.BUY, 0.70, [f"VWAP discount reversion BUY: distance {dist:.2f}%"]
     if dist >= 1.2 and rsi >= 60 and not is_strong_uptrend and news_score < 25.0:
-        return (
-            SignalDirection.SELL,
-            0.70,
-            [f"VWAP premium reversion SELL: distance {dist:.2f}% and RSI {rsi:.1f}"],
-        )
-
+        return SignalDirection.SELL, 0.70, [f"VWAP premium reversion SELL: distance {dist:.2f}%"]
     return SignalDirection.HOLD, 0.0, []
 
 
 def _volatility_rule(f: dict[str, Any]) -> tuple[SignalDirection, float, list[str]]:
-    """Agent #10: Volatility Breakout, FVG & Expansion Agent."""
     squeeze = bool(f.get("is_bb_squeeze", False))
     has_fvg = bool(f.get("has_fvg", False))
     rvol = float(f.get("rvol_20", 0.0))
     direction = int(f.get("supertrend_dir", 0))
-    close_pos = float(f.get("close_position_in_bar", 0.5))
     news_score = float(f.get("news_composite_score", 0.0))
-
     if (squeeze or has_fvg or abs(news_score) >= 30.0) and rvol >= 1.30:
-        if direction == 1 or (direction == 0 and close_pos >= 0.65 and news_score >= 20.0):
-            return (
-                SignalDirection.BUY,
-                0.75,
-                [f"Volatility expansion BUY: RVOL {rvol:.2f}x (squeeze={squeeze}, fvg={has_fvg})"],
-            )
-        if direction == -1 or (direction == 0 and close_pos <= 0.35 and news_score <= -20.0):
-            return (
-                SignalDirection.SELL,
-                0.75,
-                [f"Volatility breakdown SELL: RVOL {rvol:.2f}x (squeeze={squeeze}, fvg={has_fvg})"],
-            )
+        if direction == 1 or (direction == 0 and news_score >= 20.0):
+            return SignalDirection.BUY, 0.75, [f"Volatility expansion BUY: RVOL {rvol:.2f}x"]
+        if direction == -1 or (direction == 0 and news_score <= -20.0):
+            return SignalDirection.SELL, 0.75, [f"Volatility breakdown SELL: RVOL {rvol:.2f}x"]
     return SignalDirection.HOLD, 0.0, []
 
 
 def build_additional_agents() -> list[Strategy]:
-    """Return five complementary super-agents for a ten-member committee."""
     return [
         FeatureRuleAgent("momentum_confirmation", "RSI, MACD, ROC and News momentum", ["1m", "5m", "1h"], _momentum_rule),
         FeatureRuleAgent("volume_flow", "RVOL, CMF and MFI institutional flow", ["1m", "5m", "1h"], _volume_rule),
@@ -242,8 +170,7 @@ def build_additional_agents() -> list[Strategy]:
 
 
 def build_committee_agents(existing: list[Strategy]) -> list[Strategy]:
-    """Compose up to ten agents while preserving the original strategies."""
     return (existing + build_additional_agents())[:10]
 
 
-__all__ = ["FeatureRuleAgent", "build_additional_agents", "build_committee_agents"]
+____al__l__ = ["FeatureRuleAgent", "build_additional_agents", "build_committee_agents"]
