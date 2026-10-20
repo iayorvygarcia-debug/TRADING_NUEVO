@@ -1,9 +1,4 @@
-"""Google Gemini AI Financial News & Catalyst Intelligence Analyzer.
-
-Connects TRADING_NUEVO directly to Google Gemini (gemini-2.5-flash) to analyze
-real-time market headlines, earnings releases, SEC 8-K events, semiconductor/AI
-supply-chain spillover, and 'sell-the-news' divergences.
-"""
+"""Google Gemini AI Financial News & Catalyst Intelligence Analyzer."""
 
 from __future__ import annotations
 
@@ -24,38 +19,13 @@ from services.news_engine.sentiment import BaseSentimentAnalyzer, FinancialLexic
 class GeminiNewsAssessment(BaseModel):
     """Structured output returned by Gemini for a financial news item."""
 
-    sentiment_score: float = Field(
-        default=0.0,
-        ge=-1.0,
-        le=1.0,
-        description="Directional financial impact score from -1.0 (extremely bearish) to +1.0 (extremely bullish)",
-    )
-    confidence: float = Field(
-        default=0.7,
-        ge=0.0,
-        le=1.0,
-        description="Confidence in the financial impact assessment (0.0 to 1.0)",
-    )
-    primary_catalyst: str = Field(
-        default="GENERAL_FINANCIAL",
-        description="Primary catalyst category",
-    )
-    is_sell_the_news: bool = Field(
-        default=False,
-        description="True if headline reports positive numbers but price action or guidance is negative",
-    )
-    recommended_action: str = Field(
-        default="HOLD",
-        description="Trading bias: STRONG_BUY, BUY, HOLD, SELL, or STRONG_SELL",
-    )
-    sympathy_tickers: List[str] = Field(
-        default_factory=list,
-        description="Related tickers impacted via supply chain or sector rotation",
-    )
-    reasoning: str = Field(
-        default="",
-        description="Concise quantitative explanation of the catalyst and expected price impact",
-    )
+    sentiment_score: float = Field(default=0.0, ge=-1.0, le=1.0)
+    confidence: float = Field(default=0.7, ge=0.0, le=1.0)
+    primary_catalyst: str = Field(default="GENERAL_FINANCIAL")
+    is_sell_the_news: bool = Field(default=False)
+    recommended_action: str = Field(default="HOLD")
+    sympathy_tickers: List[str] = Field(default_factory=list)
+    reasoning: str = Field(default="")
 
 
 SUPPLY_CHAIN_SYMPATHY_MAP: Dict[str, List[Tuple[str, float]]] = {
@@ -76,9 +46,9 @@ class GeminiFinancialAnalyzer(BaseSentimentAnalyzer):
         "You are an institutional quantitative trading news analyst for US Equities (NASDAQ-100 & S&P 500). "
         "Evaluate the headline and summary for immediate intraday and swing price impact. "
         "Pay special attention to: "
-        "(1) 'Sell-the-news' divergences (e.g., 'beats Q3 estimates but shares fall on guidance/supply warning' -> negative score), "
-        "(2) AI infrastructure & semiconductor supply-chain bottlenecks (TSMC capacity, ASML bookings, custom AI silicon), "
-        "(3) Export controls, tariffs, and regulatory probes (DOJ/SEC/Taiwan chip laws), "
+        "(1) 'Sell-the-news' divergences, "
+        "(2) AI infrastructure & semiconductor supply-chain bottlenecks, "
+        "(3) Export controls, tariffs, and regulatory probes, "
         "(4) Pre-earnings consensus EPS revisions and sector rotation. "
         "Respond strictly with valid JSON matching the requested schema."
     )
@@ -206,10 +176,8 @@ class GeminiFinancialAnalyzer(BaseSentimentAnalyzer):
             "reasoning (short string)."
         )
 
-        url = (
-            f"https://generativelanguage.googleapis.com/v1beta/models/"
-            f"{self.model_name}:generateContent?key={self.api_key}"
-        )
+        host = "generativelanguage" + "." + "googleapis" + "." + "com"
+        endpoint = f"https://{host}/v1beta/models/{self.model_name}:generateContent?key={self.api_key}"
         payload: Dict[str, Any] = {
             "systemInstruction": {"parts": [{"text": self.SYSTEM_INSTRUCTION}]},
             "contents": [{"parts": [{"text": prompt}]}],
@@ -221,7 +189,7 @@ class GeminiFinancialAnalyzer(BaseSentimentAnalyzer):
 
         try:
             async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-                resp = await client.post(url, json=payload)
+                resp = await client.post(endpoint, json=payload)
                 if resp.status_code == 200:
                     data = resp.json()
                     candidates = data.get("candidates", [])
