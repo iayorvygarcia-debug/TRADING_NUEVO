@@ -109,7 +109,7 @@ class MeanReversionStrategy(Strategy):
             if is_pinbar:
                 reasons.append("Reversal pinbar rejecting lower prices")
 
-            confidence = 0.78 if is_high_prob_pullback else 0.74
+            confidence = 0.78 if is_high_prob_pullback else 0.75
             if bullish_patterns > 0 and is_pinbar:
                 confidence = min(0.95, confidence + 0.12)
 
