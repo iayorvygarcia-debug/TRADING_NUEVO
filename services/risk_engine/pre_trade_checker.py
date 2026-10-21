@@ -122,14 +122,24 @@ class PreTradeChecker:
                 f"(max {self.settings.max_sector_exposure * 100.0:.1f}%)"
             )
 
-        max_allowed_notional = equity * self.settings.max_position_size
+        use_op_cap = getattr(self.settings, "use_operational_capital", True)
+        if use_op_cap:
+            op_cap = float(getattr(self.settings, "operational_capital", 1000.0))
+            max_op_size_pct = float(getattr(self.settings, "max_operational_position_size", 0.20))
+            max_allowed_notional = op_cap * max_op_size_pct
+            if not is_exit and price > (op_cap * 0.45):
+                violations.append(f"Share price (${price:.2f}) exceeds operational capital budget (${op_cap * 0.45:.2f})")
+        else:
+            max_allowed_notional = equity * self.settings.max_position_size
+
         approved_qty = quantity
 
         if not is_exit and notional > max_allowed_notional:
-            approved_qty = max_allowed_notional / price
+            scaled_shares = max(1.0, max_allowed_notional / price) if (use_op_cap and price <= op_cap * 0.45) else (max_allowed_notional / price)
+            approved_qty = min(quantity, scaled_shares)
             reasons.append(
                 f"Position size scaled down from {quantity:.1f} to {approved_qty:.1f} shares "
-                f"to respect max {self.settings.max_position_size * 100.0:.1f}% equity limit."
+                f"to respect operational limit of ${max_allowed_notional:.2f}."
             )
 
         multiplier = self.circuit_breaker.position_size_multiplier

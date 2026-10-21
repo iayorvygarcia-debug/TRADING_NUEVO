@@ -55,6 +55,7 @@ from strategies.vwap_reversion import VWAPReversionStrategy
 from strategies.multi_timeframe_confluence import MultiTimeframeConfluenceStrategy
 from strategies.committee_agents import build_committee_agents
 from services.shadow_engine import ShadowTradingEngine
+from services.harness_engine import get_harness_engine
 
 
 logger = get_logger("quant_trading_worker")
@@ -129,6 +130,10 @@ class QuantTradingWorker:
             initial_capital=float(worker_cfg.get("daily_starting_equity", 1000.0)),
             shadow_mode=self.shadow_mode,
         )
+
+        # Harness² Engine (Google Research - Recursive Agent Harnessing)
+        self.harness_engine = get_harness_engine()
+        self._tracked_open_positions: Dict[str, Any] = {}
 
         # Always-On Throttle & Opening Plan Cache
         self._last_analysis_time: Optional[datetime] = None
@@ -505,6 +510,7 @@ class QuantTradingWorker:
                 "min_consensus_ratio": 0.60,
             },
             "news_scores": dict(self.latest_news_scores),
+            "harness": self.harness_engine.get_summary() if hasattr(self, "harness_engine") else None,
             "activity_logs": list(reversed(self.activity_logs[-15:])),
             "latest_status": self.activity_logs[-1]["message"] if self.activity_logs else "Sistema en espera",
         }
@@ -893,6 +899,10 @@ class QuantTradingWorker:
                         for agent in self.committee_agents
                     ))
                     valid_signals = [s for s in strategy_signals if s is not None]
+                    if hasattr(self, "harness_engine"):
+                        self.signal_combiner._weights = self.harness_engine.get_adjusted_committee_weights(
+                            self.signal_combiner.DEFAULT_WEIGHTS
+                        )
                     ensemble = self.signal_combiner.combine(
                         sym, valid_signals, market_regime, news_composite_score=news_score
                     )
@@ -1018,10 +1028,11 @@ class QuantTradingWorker:
                 if self.shadow_mode:
                     import math
                     settings = getattr(self, "settings", None) or get_settings()
-                    real_cap = float(getattr(self.broker, "equity", settings.risk.initial_capital))
-                    max_sz = float(getattr(settings.risk, "max_position_size", 0.05))
+                    use_op_cap = getattr(settings.risk, "use_operational_capital", True)
+                    real_cap = float(getattr(settings.risk, "operational_capital", 1000.0)) if use_op_cap else float(getattr(self.broker, "equity", settings.risk.initial_capital))
+                    max_sz = float(getattr(settings.risk, "max_operational_position_size", 0.20)) if use_op_cap else float(getattr(settings.risk, "max_position_size", 0.05))
                     t_notional = real_cap * max_sz
-                    base_shs = max(1.0, float(math.floor(t_notional / current_price))) if current_price > 0 else 25.0
+                    base_shs = max(1.0, float(math.floor(t_notional / current_price))) if (current_price > 0 and current_price <= real_cap * 0.45) else (1.0 if (current_price > 0 and current_price <= real_cap * 0.45) else 0.0)
                     final_shs = float(math.floor(base_shs * entry_size_mult))
                     exec_limit_price = round(current_price * (1.002 if direction == SignalDirection.BUY else 0.998), 2) if is_extended_session else None
 
@@ -1399,6 +1410,37 @@ class QuantTradingWorker:
 
         # 8. Reconcile broker positions and mark-to-market
         await self.broker.reconcile()
+
+        # 8.1. Harness² Real-Time Closed Trade Reflection & Diagnostics
+        try:
+            current_positions = await self.broker.get_positions()
+            current_syms = {p.symbol: p for p in current_positions}
+            if hasattr(self, "_tracked_open_positions") and self._tracked_open_positions:
+                for prev_sym, prev_pos in list(self._tracked_open_positions.items()):
+                    if prev_sym not in current_syms:
+                        entry_px = float(getattr(prev_pos, "avg_entry_price", 0.0))
+                        fv = self.scanner.feature_store.get(prev_sym) if hasattr(self, "scanner") else None
+                        cur_px = float(getattr(fv, "close_price", entry_px)) if fv else entry_px
+                        qty = float(getattr(prev_pos, "quantity", 1.0))
+                        is_long = getattr(prev_pos, "side", "").lower() == "long"
+                        pnl_usd = (cur_px - entry_px) * qty if is_long else (entry_px - cur_px) * abs(qty)
+                        pnl_pct = ((cur_px - entry_px) / entry_px * 100.0) if (is_long and entry_px > 0) else (((entry_px - cur_px) / entry_px * 100.0) if entry_px > 0 else 0.0)
+                        diag = self.harness_engine.record_closed_trade(
+                            symbol=prev_sym,
+                            side="BUY" if is_long else "SELL",
+                            entry_price=entry_px,
+                            exit_price=cur_px,
+                            quantity=qty,
+                            pnl_usd=pnl_usd,
+                            pnl_pct=pnl_pct,
+                        )
+                        self._add_log(
+                            f"🧠 [HARNESS² REFLEXIÓN] {prev_sym} cerrado ({diag.failure_category.value}): PnL ${pnl_usd:+.2f} ({pnl_pct:+.2f}%)",
+                            "success" if pnl_usd >= 0 else "warning",
+                        )
+            self._tracked_open_positions = current_syms
+        except Exception as harness_err:
+            logger.warning("harness_reflection_cycle_error", error=str(harness_err))
 
         snapshot = self.get_telemetry_snapshot()
         return snapshot

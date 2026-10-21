@@ -1,0 +1,140 @@
+{
+  "operational_capital": 1000.0,
+  "max_position_size_pct": 0.2,
+  "max_positions": 5,
+  "dynamic_weights_adjustment": {
+    "trend_following": -0.02,
+    "momentum_confirmation": 0.01,
+    "vwap_reversion_guard": 0.02
+  },
+  "prompt_negative_examples": [
+    "WARNING: Avoid buying early earnings beats if pre-market gap exceeds 3% without institutional volume confirmation (sell-the-news risk).",
+    "WARNING: Check higher-timeframe ADX before entering counter-trend pullbacks."
+  ],
+  "tightened_spread_tickers": {
+    "NOW": 0.0025,
+    "INTU": 0.0025,
+    "MELI": 0.002
+  },
+  "last_reflection_time": "2026-10-21T18:06:15.398261+00:00",
+  "diagnoses": [
+    {
+      "id": "diag_HIST_MELI_01",
+      "symbol": "MELI",
+      "side": "BUY",
+      "entry_price": 1872.22,
+      "exit_price": 1854.87,
+      "pnl_usd": -34.71,
+      "pnl_pct": -0.93,
+      "holding_seconds": 1800.0,
+      "failure_category": "SIZING_OVEREXPOSURE",
+      "root_cause_explanation": "Posici\u00f3n de MELI excesiva ($3,744 USD = 374% del capital operativo de $1,000). El precio por acci\u00f3n ($1,872) es inviable para un portafolio de $1,000.",
+      "mitigation_action": "Excluir MELI de nuevas compras: el precio unitario supera el l\u00edmite del 45% ($450) del capital operativo.",
+      "timestamp": "2026-10-21T16:01:00Z",
+      "strategies_involved": [
+        "trend_following",
+        "regime_classifier"
+      ],
+      "news_score_at_entry": 0.0,
+      "spread_at_entry": 0.0018,
+      "natr_at_entry": 0.018
+    },
+    {
+      "id": "diag_HIST_ADBE_02",
+      "symbol": "ADBE",
+      "side": "BUY",
+      "entry_price": 256.74,
+      "exit_price": 255.22,
+      "pnl_usd": -28.88,
+      "pnl_pct": -0.59,
+      "holding_seconds": 3600.0,
+      "failure_category": "SIZING_OVEREXPOSURE",
+      "root_cause_explanation": "El bot compr\u00f3 19 acciones ($4,878 USD) usando el saldo global de $100k de Alpaca en lugar de los $1,000 operativos. Una leve fluctuaci\u00f3n de -0.59% caus\u00f3 -$28.88 de p\u00e9rdida.",
+      "mitigation_action": "Reducir tama\u00f1o m\u00e1ximo a 1 acci\u00f3n ($256 USD) para mantener el riesgo monetario bajo $5 USD por trade.",
+      "timestamp": "2026-10-21T15:26:00Z",
+      "strategies_involved": [
+        "mtf_confluence",
+        "momentum_confirmation"
+      ],
+      "news_score_at_entry": 10.0,
+      "spread_at_entry": 0.0015,
+      "natr_at_entry": 0.016
+    },
+    {
+      "id": "diag_HIST_CDNS_03",
+      "symbol": "CDNS",
+      "side": "SELL",
+      "entry_price": 317.52,
+      "exit_price": 322.86,
+      "pnl_usd": -53.4,
+      "pnl_pct": -1.68,
+      "holding_seconds": 1260.0,
+      "failure_category": "COUNTER_TREND_WHIPSAW",
+      "root_cause_explanation": "Venta en corto en falso quiebre bajista; el activo rebot\u00f3 inmediatamente contra el stop loss en un mercado intrad\u00eda en rango.",
+      "mitigation_action": "Aumentar requisito de consenso a 3 agentes y exigir confirmaci\u00f3n de ADX > 20 para validar rupturas.",
+      "timestamp": "2026-10-15T14:13:00Z",
+      "strategies_involved": [
+        "breakout",
+        "trend_following"
+      ],
+      "news_score_at_entry": -15.0,
+      "spread_at_entry": 0.0022,
+      "natr_at_entry": 0.021
+    },
+    {
+      "id": "diag_HIST_MRVL_04",
+      "symbol": "MRVL",
+      "side": "SELL",
+      "entry_price": 237.97,
+      "exit_price": 241.55,
+      "pnl_usd": -35.8,
+      "pnl_pct": -1.5,
+      "holding_seconds": 1020.0,
+      "failure_category": "COUNTER_TREND_WHIPSAW",
+      "root_cause_explanation": "Entrada short ejecutada tarde tras extensi\u00f3n del movimiento. Reversi\u00f3n abrupta al VWAP gener\u00f3 toque de stop.",
+      "mitigation_action": "Atenuar ponderaci\u00f3n de trend_following en reg\u00edmenes laterales y dar m\u00e1s peso a vwap_reversion_guard.",
+      "timestamp": "2026-10-15T19:19:00Z",
+      "strategies_involved": [
+        "trend_following"
+      ],
+      "news_score_at_entry": -20.0,
+      "spread_at_entry": 0.002,
+      "natr_at_entry": 0.024
+    }
+  ],
+  "lessons": [
+    {
+      "id": "lesson_MELI_01",
+      "symbol": "MELI",
+      "component": "position_sizing",
+      "lesson_text": "Excluir MELI y activos con precio > $450 USD: comprar 1 sola acci\u00f3n consume m\u00e1s del 45% del capital operativo de $1,000.",
+      "evidence": "Diagn\u00f3stico diag_HIST_MELI_01: posici\u00f3n de $3,744 caus\u00f3 p\u00e9rdida desproporcionada de -$34.71 con apenas -0.93% de ca\u00edda.",
+      "confidence": 0.95,
+      "times_applied": 1,
+      "created_at": "2026-10-21T16:05:00Z",
+      "is_active": true
+    },
+    {
+      "id": "lesson_SIZING_02",
+      "symbol": null,
+      "component": "position_sizing",
+      "lesson_text": "Limitar compras a m\u00e1ximo $200 USD por posici\u00f3n (20% de $1,000) para acotar cualquier p\u00e9rdida a menos de $5 USD.",
+      "evidence": "Diagn\u00f3stico diag_HIST_ADBE_02: 19 acciones representaron $4,878 (487% de capital operativo).",
+      "confidence": 0.98,
+      "times_applied": 3,
+      "created_at": "2026-10-21T15:30:00Z",
+      "is_active": true
+    },
+    {
+      "id": "lesson_WHIPSAW_03",
+      "symbol": null,
+      "component": "agent_weights",
+      "lesson_text": "Atenuar peso de trend_following (-0.02) y aumentar vwap_reversion_guard (+0.02) para mitigar p\u00e9rdidas por falso quiebre.",
+      "evidence": "Diagn\u00f3sticos CDNS y MRVL mostraron entradas de ruptura fallidas en consolidaciones laterales.",
+      "confidence": 0.88,
+      "times_applied": 2,
+      "created_at": "2026-10-21T14:00:00Z",
+      "is_active": true
+    }
+  ]
+}

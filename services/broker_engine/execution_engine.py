@@ -154,11 +154,17 @@ class ExecutionEngine:
                     )
                     return None
 
-            # Real capital baseline from broker account (e.g. $100,000 in Alpaca Paper or live balance)
+            # Real capital baseline: respect the $1,000 operational capital
             settings = getattr(self, "settings", None) or get_settings()
-            account_equity = float(account.equity) if (account and getattr(account, "equity", 0) > 0) else float(settings.risk.initial_capital)
-            max_pos_size_pct = float(getattr(settings.risk, "max_position_size", 0.05))  # 5% max per position ($5,000 on $100k)
-            risk_pct = float(getattr(settings.risk, "risk_per_trade", getattr(settings.risk, "risk_per_trade_pct", 0.01)))         # 1% risk per trade ($1,000 on $100k)
+            use_op_cap = getattr(settings.risk, "use_operational_capital", True)
+            if use_op_cap:
+                account_equity = float(getattr(settings.risk, "operational_capital", 1000.0))
+                max_pos_size_pct = float(getattr(settings.risk, "max_operational_position_size", 0.20))
+            else:
+                account_equity = float(account.equity) if (account and getattr(account, "equity", 0) > 0) else float(settings.risk.initial_capital)
+                max_pos_size_pct = float(getattr(settings.risk, "max_position_size", 0.05))
+
+            risk_pct = float(getattr(settings.risk, "risk_per_trade", getattr(settings.risk, "risk_per_trade_pct", 0.01)))
 
             # Build session-aware PortfolioRiskState with true daily starting & peak equity
             if hasattr(self.risk_engine, "get_or_create_portfolio_state"):
@@ -204,6 +210,11 @@ class ExecutionEngine:
                     base_shares = float(default_shares)
                 elif current_price > 0:
                     from services.risk_engine.position_sizing import risk_based_shares
+                    # On a $1,000 account, skip assets whose single share exceeds $450 (e.g. MELI, MSFT)
+                    if use_op_cap and current_price > (account_equity * 0.45):
+                        logger.info("execution_aborted_price_exceeds_operational_budget", symbol=signal.symbol, price=current_price, max_price=account_equity * 0.45)
+                        return None
+
                     base_shares = risk_based_shares(
                         capital=account_equity,
                         entry_price=current_price,
@@ -211,13 +222,13 @@ class ExecutionEngine:
                         risk_per_trade_pct=risk_pct,
                         max_notional_pct=max_pos_size_pct,
                     )
-                    if base_shares <= 0:
+                    if base_shares <= 0 and current_price <= (account_equity * 0.45):
                         stop_px = signal.suggested_stop
-                        one_share_risk = abs(current_price - stop_px) if stop_px else 0.0
-                        if one_share_risk <= 2.0 * account_equity * risk_pct:
-                            base_shares = 1.0  # single share still within 2x risk budget
+                        one_share_risk = abs(current_price - stop_px) if stop_px else (current_price * 0.02)
+                        if one_share_risk <= (account_equity * 0.03):
+                            base_shares = 1.0
                 else:
-                    base_shares = 20.0
+                    base_shares = 2.0
 
                 order_shares = float(math.floor(base_shares * size_multiplier))
                 # If calculated quantity rounds down to 0, FAIL-SAFE to 0 orders. NEVER invent 1 share.

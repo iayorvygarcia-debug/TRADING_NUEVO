@@ -777,6 +777,30 @@ async def reset_paper_account():
     }
 
 
+# ── Harness² (Recursive Agent Harnessing) Endpoints ───────────────
+@app.get("/api/v1/harness/status", tags=["Harness² AI"])
+async def get_harness_status():
+    """Returns the executive summary of the Harness² recursive self-tuning engine."""
+    from services.harness_engine import get_harness_engine
+    return get_harness_engine().get_summary()
+
+
+@app.get("/api/v1/harness/diagnoses", tags=["Harness² AI"])
+async def get_harness_diagnoses(limit: int = 50):
+    """Returns recent forensic trade diagnoses explaining causes of losses and wins."""
+    from services.harness_engine import get_harness_engine
+    engine = get_harness_engine()
+    return [d.model_dump() for d in reversed(engine.state.diagnoses[-limit:])]
+
+
+@app.get("/api/v1/harness/lessons", tags=["Harness² AI"])
+async def get_harness_lessons():
+    """Returns active evidence-backed rules and lessons derived from historical outcomes."""
+    from services.harness_engine import get_harness_engine
+    engine = get_harness_engine()
+    return [l.model_dump() for l in engine.state.lessons if l.is_active]
+
+
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
     from fastapi.responses import Response
