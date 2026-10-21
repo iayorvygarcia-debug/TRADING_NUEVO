@@ -58,8 +58,6 @@ class DriftReport(BaseModel):
 class DatasetSplit(BaseModel):
     """Container for chronologically partitioned training/validation/testing matrices."""
     model_config = {"arbitrary_types_allowed": True}
-    class Config:
-        arbitrary_types_allowed = True
 
     X_train: np.ndarray
     y_train: np.ndarray

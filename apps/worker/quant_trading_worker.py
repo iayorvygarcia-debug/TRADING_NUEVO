@@ -971,7 +971,7 @@ class QuantTradingWorker:
                 if not guard_res.approved:
                     logger.warning("signal_rejected_by_pre_trade_guard", symbol=sym, violations=guard_res.violations)
                     self._add_log(f"🛡️ Guardián Pre-Trade ({sym}): {guard_res.violations[0]}", "warning")
-                    if hasattr(self, "shadow_engine"):
+                    if self.shadow_mode and hasattr(self, "shadow_engine"):
                         self.shadow_engine.evaluate_and_record_decision(
                             symbol=sym,
                             strategies=combined_signal.contributing_strategies,
