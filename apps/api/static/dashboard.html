@@ -2481,27 +2481,15 @@
             if (!Array.isArray(data) || data.length === 0) return;
             try {
                 const serverPoints = data
-                    .filter(p => p && p.t && p.equity !== null && !isNaN(Number(p.equity)) && Number(p.equity) > 0 && Number(p.equity) < 50000)
+                    .filter(p => p && p.t && p.equity !== null && !isNaN(Number(p.equity)) && Number(p.equity) > 0)
                     .map(p => ({
                         time: Number(p.t),
                         value: Number(p.equity)
                     }))
                     .filter(p => p.time && !isNaN(p.time) && p.time > 0 && !isNaN(p.value));
 
-                // Filtrar cualquier pico espurio en medio de la serie histórica
-                const filteredPoints = serverPoints.filter((pt, idx, arr) => {
-                    if (Math.abs(pt.value - INITIAL_CAPITAL) < 0.01) {
-                        const prev = arr[idx - 1] ? arr[idx - 1].value : pt.value;
-                        const next = arr[idx + 1] ? arr[idx + 1].value : pt.value;
-                        if (Math.abs(prev - INITIAL_CAPITAL) > 50 || Math.abs(next - INITIAL_CAPITAL) > 50) {
-                            return false; // Descartar pico vertical anómalo
-                        }
-                    }
-                    return true;
-                });
-
-                if (filteredPoints.length > 0) {
-                    equityHistory = filteredPoints;
+                if (serverPoints.length > 0) {
+                    equityHistory = serverPoints;
                     if (equitySeries && equityChart) {
                         try {
                             equitySeries.setData(equityHistory);
@@ -2532,15 +2520,6 @@
             const pVal = Number(portfolioValue);
             if (!pVal || isNaN(pVal) || pVal <= 0) return;
 
-            // Descartar picos anómalos o valores brutos no calibrados de broker (> 50,000)
-            if (pVal > 50000) return;
-            if (equityHistory.length > 0) {
-                const lastVal = equityHistory[equityHistory.length - 1].value;
-                if (Math.abs(pVal - INITIAL_CAPITAL) < 0.01 && Math.abs(lastVal - INITIAL_CAPITAL) > 50) {
-                    return; // Ignorar glitch espurio
-                }
-            }
-
             const now = Math.floor(Date.now() / 1000);
 
             // Actualizar o agregar punto
@@ -2566,19 +2545,20 @@
                 } catch(e) {}
             }
 
+            const baseVal = pVal > 10000 ? 100000.0 : 1000.0;
             if (equityHistory.length >= 2 && 
                 typeof equityHistory[0].time === 'number' && 
                 typeof equityHistory[equityHistory.length - 1].time === 'number' &&
                 equityHistory[0].time < equityHistory[equityHistory.length - 1].time) {
                 try {
                     baselineSeries.setData([
-                        { time: equityHistory[0].time, value: INITIAL_CAPITAL },
-                        { time: equityHistory[equityHistory.length - 1].time, value: INITIAL_CAPITAL }
+                        { time: equityHistory[0].time, value: baseVal },
+                        { time: equityHistory[equityHistory.length - 1].time, value: baseVal }
                     ]);
                 } catch(e) {}
             }
             peakEquity = Math.max(peakEquity, pVal);
-            const totalRet = (pVal - INITIAL_CAPITAL) / INITIAL_CAPITAL * 100;
+            const totalRet = (pVal - baseVal) / baseVal * 100;
             const drawdown = peakEquity > 0 ? (peakEquity - pVal) / peakEquity * 100 : 0;
             const retEl = document.getElementById('eq-total-return');
             if (retEl) {

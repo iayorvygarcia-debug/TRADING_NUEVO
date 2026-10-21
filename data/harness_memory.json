@@ -3,7 +3,7 @@
   "max_position_size_pct": 0.2,
   "max_positions": 5,
   "dynamic_weights_adjustment": {
-    "trend_following": -0.02,
+    "trend_following": -0.04,
     "momentum_confirmation": 0.01,
     "vwap_reversion_guard": 0.02
   },
@@ -16,7 +16,7 @@
     "INTU": 0.0025,
     "MELI": 0.002
   },
-  "last_reflection_time": "2026-10-21T18:06:15.398261+00:00",
+  "last_reflection_time": "2026-10-21T18:23:21.681159Z",
   "diagnoses": [
     {
       "id": "diag_HIST_MELI_01",
@@ -28,8 +28,8 @@
       "pnl_pct": -0.93,
       "holding_seconds": 1800.0,
       "failure_category": "SIZING_OVEREXPOSURE",
-      "root_cause_explanation": "Posici\u00f3n de MELI excesiva ($3,744 USD = 374% del capital operativo de $1,000). El precio por acci\u00f3n ($1,872) es inviable para un portafolio de $1,000.",
-      "mitigation_action": "Excluir MELI de nuevas compras: el precio unitario supera el l\u00edmite del 45% ($450) del capital operativo.",
+      "root_cause_explanation": "Posición de MELI excesiva ($3,744 USD = 374% del capital operativo de $1,000). El precio por acción ($1,872) es inviable para un portafolio de $1,000.",
+      "mitigation_action": "Excluir MELI de nuevas compras: el precio unitario supera el límite del 45% ($450) del capital operativo.",
       "timestamp": "2026-10-21T16:01:00Z",
       "strategies_involved": [
         "trend_following",
@@ -49,8 +49,8 @@
       "pnl_pct": -0.59,
       "holding_seconds": 3600.0,
       "failure_category": "SIZING_OVEREXPOSURE",
-      "root_cause_explanation": "El bot compr\u00f3 19 acciones ($4,878 USD) usando el saldo global de $100k de Alpaca en lugar de los $1,000 operativos. Una leve fluctuaci\u00f3n de -0.59% caus\u00f3 -$28.88 de p\u00e9rdida.",
-      "mitigation_action": "Reducir tama\u00f1o m\u00e1ximo a 1 acci\u00f3n ($256 USD) para mantener el riesgo monetario bajo $5 USD por trade.",
+      "root_cause_explanation": "El bot compró 19 acciones ($4,878 USD) usando el saldo global de $100k de Alpaca en lugar de los $1,000 operativos. Una leve fluctuación de -0.59% causó -$28.88 de pérdida.",
+      "mitigation_action": "Reducir tamaño máximo a 1 acción ($256 USD) para mantener el riesgo monetario bajo $5 USD por trade.",
       "timestamp": "2026-10-21T15:26:00Z",
       "strategies_involved": [
         "mtf_confluence",
@@ -70,8 +70,8 @@
       "pnl_pct": -1.68,
       "holding_seconds": 1260.0,
       "failure_category": "COUNTER_TREND_WHIPSAW",
-      "root_cause_explanation": "Venta en corto en falso quiebre bajista; el activo rebot\u00f3 inmediatamente contra el stop loss en un mercado intrad\u00eda en rango.",
-      "mitigation_action": "Aumentar requisito de consenso a 3 agentes y exigir confirmaci\u00f3n de ADX > 20 para validar rupturas.",
+      "root_cause_explanation": "Venta en corto en falso quiebre bajista; el activo rebotó inmediatamente contra el stop loss en un mercado intradía en rango.",
+      "mitigation_action": "Aumentar requisito de consenso a 3 agentes y exigir confirmación de ADX > 20 para validar rupturas.",
       "timestamp": "2026-10-15T14:13:00Z",
       "strategies_involved": [
         "breakout",
@@ -91,8 +91,8 @@
       "pnl_pct": -1.5,
       "holding_seconds": 1020.0,
       "failure_category": "COUNTER_TREND_WHIPSAW",
-      "root_cause_explanation": "Entrada short ejecutada tarde tras extensi\u00f3n del movimiento. Reversi\u00f3n abrupta al VWAP gener\u00f3 toque de stop.",
-      "mitigation_action": "Atenuar ponderaci\u00f3n de trend_following en reg\u00edmenes laterales y dar m\u00e1s peso a vwap_reversion_guard.",
+      "root_cause_explanation": "Entrada short ejecutada tarde tras extensión del movimiento. Reversión abrupta al VWAP generó toque de stop.",
+      "mitigation_action": "Atenuar ponderación de trend_following en regímenes laterales y dar más peso a vwap_reversion_guard.",
       "timestamp": "2026-10-15T19:19:00Z",
       "strategies_involved": [
         "trend_following"
@@ -100,6 +100,26 @@
       "news_score_at_entry": -20.0,
       "spread_at_entry": 0.002,
       "natr_at_entry": 0.024
+    },
+    {
+      "id": "diag_TEST_WHIPSAW_356a52d7",
+      "symbol": "TEST_WHIPSAW",
+      "side": "BUY",
+      "entry_price": 100.0,
+      "exit_price": 98.0,
+      "pnl_usd": -4.0,
+      "pnl_pct": -2.0,
+      "holding_seconds": 1200.0,
+      "failure_category": "COUNTER_TREND_WHIPSAW",
+      "root_cause_explanation": "Whipsaw contra-tendencia en TEST_WHIPSAW: la estrategia de tendencia entró en un giro falso dentro de un mercado lateral o en consolidación.",
+      "mitigation_action": "Aumentar requisito de consenso a mínimo 3 agentes y exigir ADX > 22 para habilitar trend-following.",
+      "timestamp": "2026-10-21T18:23:21.680978Z",
+      "strategies_involved": [
+        "trend_following"
+      ],
+      "news_score_at_entry": 0.0,
+      "spread_at_entry": 0.001,
+      "natr_at_entry": 0.02
     }
   ],
   "lessons": [
@@ -107,8 +127,8 @@
       "id": "lesson_MELI_01",
       "symbol": "MELI",
       "component": "position_sizing",
-      "lesson_text": "Excluir MELI y activos con precio > $450 USD: comprar 1 sola acci\u00f3n consume m\u00e1s del 45% del capital operativo de $1,000.",
-      "evidence": "Diagn\u00f3stico diag_HIST_MELI_01: posici\u00f3n de $3,744 caus\u00f3 p\u00e9rdida desproporcionada de -$34.71 con apenas -0.93% de ca\u00edda.",
+      "lesson_text": "Excluir MELI y activos con precio > $450 USD: comprar 1 sola acción consume más del 45% del capital operativo de $1,000.",
+      "evidence": "Diagnóstico diag_HIST_MELI_01: posición de $3,744 causó pérdida desproporcionada de -$34.71 con apenas -0.93% de caída.",
       "confidence": 0.95,
       "times_applied": 1,
       "created_at": "2026-10-21T16:05:00Z",
@@ -118,8 +138,8 @@
       "id": "lesson_SIZING_02",
       "symbol": null,
       "component": "position_sizing",
-      "lesson_text": "Limitar compras a m\u00e1ximo $200 USD por posici\u00f3n (20% de $1,000) para acotar cualquier p\u00e9rdida a menos de $5 USD.",
-      "evidence": "Diagn\u00f3stico diag_HIST_ADBE_02: 19 acciones representaron $4,878 (487% de capital operativo).",
+      "lesson_text": "Limitar compras a máximo $200 USD por posición (20% de $1,000) para acotar cualquier pérdida a menos de $5 USD.",
+      "evidence": "Diagnóstico diag_HIST_ADBE_02: 19 acciones representaron $4,878 (487% de capital operativo).",
       "confidence": 0.98,
       "times_applied": 3,
       "created_at": "2026-10-21T15:30:00Z",
@@ -129,11 +149,22 @@
       "id": "lesson_WHIPSAW_03",
       "symbol": null,
       "component": "agent_weights",
-      "lesson_text": "Atenuar peso de trend_following (-0.02) y aumentar vwap_reversion_guard (+0.02) para mitigar p\u00e9rdidas por falso quiebre.",
-      "evidence": "Diagn\u00f3sticos CDNS y MRVL mostraron entradas de ruptura fallidas en consolidaciones laterales.",
+      "lesson_text": "Atenuar peso de trend_following (-0.02) y aumentar vwap_reversion_guard (+0.02) para mitigar pérdidas por falso quiebre.",
+      "evidence": "Diagnósticos CDNS y MRVL mostraron entradas de ruptura fallidas en consolidaciones laterales.",
       "confidence": 0.88,
       "times_applied": 2,
       "created_at": "2026-10-21T14:00:00Z",
+      "is_active": true
+    },
+    {
+      "id": "lesson_TEST_WHIPSAW_b1b3b8",
+      "symbol": "TEST_WHIPSAW",
+      "component": "agent_weights",
+      "lesson_text": "Reducir peso de trend_following en mercados sin tendencia definida (ADX < 20).",
+      "evidence": "Diagnóstico diag_TEST_WHIPSAW_356a52d7: pérdida de -$4.00 USD (-2.00%) en TEST_WHIPSAW.",
+      "confidence": 0.85,
+      "times_applied": 0,
+      "created_at": "2026-10-21T18:23:21.681097Z",
       "is_active": true
     }
   ]

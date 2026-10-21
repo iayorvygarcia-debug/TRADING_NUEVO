@@ -2,33 +2,18 @@
   "auto_trade": true,
   "close_positions_eod": false,
   "shadow_mode": false,
-  "position_entry_times": {
-    "GOOGL": "2026-10-13T20:00:52.841640+00:00",
-    "NFLX": "2026-10-13T20:00:53.100579+00:00",
-    "NOW": "2026-10-13T20:00:53.101896+00:00",
-    "TSLA": "2026-10-13T20:00:53.102936+00:00",
-    "MSFT": "2026-10-13T20:00:54.629473+00:00"
-  },
-  "position_be_activated": {
-    "GOOGL": true,
-    "MSFT": true
-  },
+  "position_entry_times": {},
+  "position_be_activated": {},
   "position_partial_taken": {},
-  "position_peaks": {
-    "GOOGL": 353.78,
-    "NFLX": 70.55,
-    "NOW": 138.61,
-    "TSLA": 374.65,
-    "MSFT": 543.56
-  },
-  "session_date": "2026-10-13",
-  "daily_starting_equity": 100149.02,
-  "daily_peak_equity": 100149.7,
+  "position_peaks": {},
+  "session_date": "2026-10-21",
+  "daily_starting_equity": 100000.0,
+  "daily_peak_equity": 100000.0,
   "opening_plan": {
     "session": "overnight_analysis",
     "generated_at": "2026-10-03T01:33:38.838491+00:00",
     "top_candidates": [],
     "valid_until": "09:35 ET"
   },
-  "updated_at": "2026-10-13T20:00:56.204201+00:00"
+  "updated_at": "2026-10-21T18:13:41.621239+00:00"
 }
