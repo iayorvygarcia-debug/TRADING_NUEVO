@@ -103,14 +103,19 @@ def _momentum_rule(f: dict[str, Any]) -> tuple[SignalDirection, float, list[str]
 
 
 def _volume_rule(f: dict[str, Any]) -> tuple[SignalDirection, float, list[str]]:
+    """Agent #7: Institutional Volume & Money Flow (RVOL + CMF + MFI + News Buzz)."""
     rvol = float(f.get("rvol_20", 0.0))
     cmf = float(f.get("cmf_20", 0.0))
     mfi = float(f.get("mfi_14", 50.0))
+    buzz = float(f.get("news_buzz_ratio", 1.0))
     news_score = float(f.get("news_composite_score", 0.0))
+
     if rvol >= 1.25 and (cmf >= 0.08 or (mfi >= 55.0 and news_score >= 25.0)):
-        return SignalDirection.BUY, min(0.92, 0.68 + max(0.05, cmf)), [f"Volume-flow accumulation: RVOL {rvol:.2f}x, CMF {cmf:.2f}"]
+        score = min(0.92, 0.68 + max(0.05, cmf) + (0.04 if buzz >= 2.0 else 0.0))
+        return SignalDirection.BUY, score, [f"Volume-flow accumulation: RVOL {rvol:.2f}x, CMF {cmf:.2f}"]
     if rvol >= 1.25 and (cmf <= -0.08 or (mfi <= 45.0 and news_score <= -25.0)):
-        return SignalDirection.SELL, min(0.92, 0.68 + max(0.05, abs(cmf))), [f"Volume-flow distribution: RVOL {rvol:.2f}x, CMF {cmf:.2f}"]
+        score = min(0.92, 0.68 + max(0.05, abs(cmf)) + (0.04 if buzz >= 2.0 else 0.0))
+        return SignalDirection.SELL, score, [f"Volume-flow distribution: RVOL {rvol:.2f}x, CMF {cmf:.2f}"]
     return SignalDirection.HOLD, 0.0, []
 
 
@@ -132,10 +137,24 @@ def _vwap_rule(f: dict[str, Any]) -> tuple[SignalDirection, float, list[str]]:
     adx = float(f.get("adx_14", 0.0))
     supertrend = int(f.get("supertrend_dir", 0))
     news_score = float(f.get("news_composite_score", 0.0))
-    if news_score >= 30.0 and rsi < 75.0 and supertrend >= 0:
-        return SignalDirection.BUY, 0.78, [f"Catalyst/VWAP institutional BUY: News score {news_score:+.1f}"]
-    if news_score <= -30.0 and rsi > 25.0 and supertrend <= 0:
-        return SignalDirection.SELL, 0.78, [f"Catalyst/VWAP institutional SELL: News score {news_score:+.1f}"]
+    bull_cats = float(f.get("news_bullish_catalyst_count", 0.0))
+    bear_cats = float(f.get("news_bearish_catalyst_count", 0.0))
+
+    # 1. Strong News Catalyst Ignition (trades WITH the catalyst)
+    if (news_score >= 30.0 or bull_cats >= 1.0) and rsi < 75.0 and supertrend >= 0:
+        return (
+            SignalDirection.BUY,
+            0.78,
+            [f"Catalyst/VWAP institutional BUY: News score {news_score:+.1f} ({int(bull_cats)} bullish catalysts)"],
+        )
+    if (news_score <= -30.0 or bear_cats >= 1.0) and rsi > 25.0 and supertrend <= 0:
+        return (
+            SignalDirection.SELL,
+            0.78,
+            [f"Catalyst/VWAP institutional SELL: News score {news_score:+.1f} ({int(bear_cats)} bearish catalysts)"],
+        )
+
+    # 2. Pure VWAP Reversion (only when NOT fighting a strong runaway trend)
     is_strong_uptrend = supertrend == 1 and adx >= 25.0
     is_strong_downtrend = supertrend == -1 and adx >= 25.0
     if dist <= -1.2 and rsi <= 40 and not is_strong_downtrend and news_score > -25.0:
@@ -150,12 +169,22 @@ def _volatility_rule(f: dict[str, Any]) -> tuple[SignalDirection, float, list[st
     has_fvg = bool(f.get("has_fvg", False))
     rvol = float(f.get("rvol_20", 0.0))
     direction = int(f.get("supertrend_dir", 0))
+    close_pos = float(f.get("close_position_in_bar", 0.5))
     news_score = float(f.get("news_composite_score", 0.0))
+
     if (squeeze or has_fvg or abs(news_score) >= 30.0) and rvol >= 1.30:
-        if direction == 1 or (direction == 0 and news_score >= 20.0):
-            return SignalDirection.BUY, 0.75, [f"Volatility expansion BUY: RVOL {rvol:.2f}x"]
-        if direction == -1 or (direction == 0 and news_score <= -20.0):
-            return SignalDirection.SELL, 0.75, [f"Volatility breakdown SELL: RVOL {rvol:.2f}x"]
+        if direction == 1 or (direction == 0 and close_pos >= 0.65 and news_score >= 20.0):
+            return (
+                SignalDirection.BUY,
+                0.75,
+                [f"Volatility expansion BUY: RVOL {rvol:.2f}x (squeeze={squeeze}, fvg={has_fvg})"],
+            )
+        if direction == -1 or (direction == 0 and close_pos <= 0.35 and news_score <= -20.0):
+            return (
+                SignalDirection.SELL,
+                0.75,
+                [f"Volatility breakdown SELL: RVOL {rvol:.2f}x (squeeze={squeeze}, fvg={has_fvg})"],
+            )
     return SignalDirection.HOLD, 0.0, []
 
 
@@ -173,4 +202,4 @@ def build_committee_agents(existing: list[Strategy]) -> list[Strategy]:
     return (existing + build_additional_agents())[:10]
 
 
-____al__l__ = ["FeatureRuleAgent", "build_additional_agents", "build_committee_agents"]
+__all__ = ["FeatureRuleAgent", "build_additional_agents", "build_committee_agents"]

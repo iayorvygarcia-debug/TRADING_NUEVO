@@ -149,6 +149,19 @@ class PreTradeChecker:
         if is_approved:
             self._order_timestamps.append(now_mono)
             reasons.append("All pre-trade deterministic safety gates passed successfully.")
+            logger.info(
+                "pre_trade_risk_approved",
+                symbol=symbol,
+                quantity=approved_qty,
+                price=price,
+                notional=round(approved_qty * price, 2),
+            )
+        else:
+            logger.warning(
+                "pre_trade_risk_rejected",
+                symbol=symbol,
+                violations=violations,
+            )
 
         return PreTradeCheckResult(
             approved=is_approved,

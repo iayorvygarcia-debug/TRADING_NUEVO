@@ -110,6 +110,13 @@ class SignalCombiner:
             count_ratio = max(len(buy_signals), len(sell_signals)) / max(1, min(len(buy_signals), len(sell_signals)))
 
             if self._resolve_conflicts_to_hold and (dominance < self._conflict_dominance_ratio or count_ratio < 2.0):
+                logger.warning(
+                    "strategy_conflict_detected",
+                    symbol=symbol,
+                    num_buys=len(buy_signals),
+                    num_sells=len(sell_signals),
+                    action="holding_neutral",
+                )
                 return CombinedSignal(
                     symbol=symbol,
                     direction=SignalDirection.HOLD,
@@ -182,6 +189,14 @@ class SignalCombiner:
             and consensus_ratio >= self._min_consensus
             and len(dominant_signals) >= self._min_voters
         )
+
+        approval_note = (
+            f"Approved (Score {composite_score:.2f} >= {self._min_composite_score:.2f}, "
+            f"Agents={len(dominant_signals)}, Consensus={consensus_ratio:.2f})"
+            if is_approved
+            else f"Rejected (Score {composite_score:.2f} < {self._min_composite_score:.2f} or Consensus {consensus_ratio:.2f} < {self._min_consensus:.2f})"
+        )
+        combined_reasons.append(approval_note)
 
         return CombinedSignal(
             symbol=symbol,

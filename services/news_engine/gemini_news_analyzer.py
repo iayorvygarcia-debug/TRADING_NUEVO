@@ -46,9 +46,9 @@ class GeminiFinancialAnalyzer(BaseSentimentAnalyzer):
         "You are an institutional quantitative trading news analyst for US Equities (NASDAQ-100 & S&P 500). "
         "Evaluate the headline and summary for immediate intraday and swing price impact. "
         "Pay special attention to: "
-        "(1) 'Sell-the-news' divergences, "
-        "(2) AI infrastructure & semiconductor supply-chain bottlenecks, "
-        "(3) Export controls, tariffs, and regulatory probes, "
+        "(1) 'Sell-the-news' divergences (e.g., 'beats Q3 estimates but shares fall on guidance/supply warning' -> negative score), "
+        "(2) AI infrastructure & semiconductor supply-chain bottlenecks (TSMC capacity, ASML bookings, custom AI silicon), "
+        "(3) Export controls, tariffs, and regulatory probes (DOJ/SEC/Taiwan chip laws), "
         "(4) Pre-earnings consensus EPS revisions and sector rotation. "
         "Respond strictly with valid JSON matching the requested schema."
     )
