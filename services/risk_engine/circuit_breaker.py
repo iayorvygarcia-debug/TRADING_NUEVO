@@ -40,7 +40,7 @@ class CircuitBreaker:
         max_consecutive_losses: int = 4,
         cooldown_minutes: int = 30,
         # ── Capa 2: Trailing de Ganancia Diaria (Profit Lock-in) ──────
-        min_profit_lock_usd: float = 300.0,
+        min_profit_lock_usd: float = 500.0,
         max_profit_giveback_pct: float = 35.0,
     ) -> None:
         self.warning_loss = warning_daily_loss_pct
@@ -91,9 +91,13 @@ class CircuitBreaker:
         drawdown_pct = state.drawdown_pct
         losses = state.consecutive_losses
 
-        # Capa 2: Trailing de Ganancia Diaria
+        # Capa 2: Trailing de Ganancia Diaria (Profit Lock-in)
+        # Solo se activa si hubo ganancia significativa acumulada (>= min_profit_lock_usd)
+        # Y si la cuenta todavía está en ganancia (daily_pnl > 0).
+        # Si la cuenta está en pérdida, el riesgo es controlado por límites diarios de pérdida, no por profit-lock.
         profit_lock_breached = bool(
             state.daily_peak_profit >= self.min_profit_lock_usd
+            and state.daily_pnl > 0
             and state.profit_giveback_pct >= self.max_profit_giveback_pct
         )
 

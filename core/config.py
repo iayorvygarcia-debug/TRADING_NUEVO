@@ -265,7 +265,7 @@ class RiskSettings(BaseSettings):
     operational_capital: float = 1_000.0
     max_operational_position_size: float = 0.20
     use_operational_capital: bool = False
-    min_profit_lock_usd: float = 20.0
+    min_profit_lock_usd: float = 500.0
     max_profit_giveback_pct: float = 35.0
 
     # Dynamic Spread Configuration

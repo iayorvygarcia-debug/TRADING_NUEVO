@@ -390,6 +390,7 @@ async def activate_kill_switch(payload: Optional[KillSwitchRequest] = None):
 async def resume_trading(payload: ResumeRequest):
     """
     🔓 Resumes trading by verifying passphrase CONFIRM_RESUME.
+    Also resets Circuit Breaker to NORMAL and re-synchronizes daily equity base.
     """
     ks = get_kill_switch()
     resumed = ks.resume(passphrase=payload.passphrase)
@@ -400,14 +401,48 @@ async def resume_trading(payload: ResumeRequest):
             detail="Invalid passphrase. Operation requires 'CONFIRM_RESUME'.",
         )
 
+    from services.risk_engine.circuit_breaker import get_circuit_breaker
+    cb = get_circuit_breaker()
+    cb.reset()
+    worker = get_global_worker()
+    curr_eq = getattr(worker.broker, "equity", 100000.0)
+    worker.daily_starting_equity = curr_eq
+    worker.daily_peak_equity = curr_eq
+    worker._save_worker_config()
+
     _TELEMETRY_SNAPSHOT_CACHE["ts"] = 0.0
     _TELEMETRY_SNAPSHOT_CACHE["data"] = None
 
-    logger.info("kill_switch_resumed", operator="api_manual")
+    logger.info("kill_switch_and_circuit_breaker_resumed", operator="api_manual")
     return {
         "status": "trading_resumed",
         "kill_switch_active": ks.is_active,
-        "message": "Trading successfully resumed.",
+        "circuit_breaker_tier": cb.level.name,
+        "message": "Trading successfully resumed and Circuit Breaker reset to NORMAL.",
+    }
+
+
+@app.post("/api/v1/control/circuit-breaker/reset", tags=["Control"])
+async def reset_circuit_breaker():
+    """
+    Desbloquea y reinicia el Circuit Breaker de vuelta a NORMAL,
+    actualizando la base diaria de equity para reanudar operaciones inmediatamente.
+    """
+    from services.risk_engine.circuit_breaker import get_circuit_breaker
+    cb = get_circuit_breaker()
+    cb.reset()
+    worker = get_global_worker()
+    curr_eq = getattr(worker.broker, "equity", 100000.0)
+    worker.daily_starting_equity = curr_eq
+    worker.daily_peak_equity = curr_eq
+    worker._save_worker_config()
+    _TELEMETRY_SNAPSHOT_CACHE["ts"] = 0.0
+    _TELEMETRY_SNAPSHOT_CACHE["data"] = None
+    logger.info("circuit_breaker_manually_reset")
+    return {
+        "status": "circuit_breaker_reset",
+        "circuit_breaker_tier": cb.level.name,
+        "message": "Circuit Breaker restablecido a NORMAL. Compras desbloqueadas.",
     }
 
 
@@ -763,6 +798,8 @@ async def reset_paper_account():
             logger.warning("reset_positions_error", error=str(e))
     worker.daily_starting_equity = initial_cap
     worker.daily_peak_equity = initial_cap
+    from services.risk_engine.circuit_breaker import get_circuit_breaker
+    get_circuit_breaker().reset()
     worker.position_entry_times.clear()
     worker.position_be_activated.clear()
     worker.position_peaks.clear()

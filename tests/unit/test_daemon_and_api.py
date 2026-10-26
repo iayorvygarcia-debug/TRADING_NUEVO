@@ -173,3 +173,12 @@ def test_api_toggle_shadow_mode():
         assert resp_off.status_code == 200
         assert resp_off.json()["shadow_mode"] is False
 
+
+def test_api_circuit_breaker_reset():
+    with TestClient(app) as client:
+        resp = client.post("/api/v1/control/circuit-breaker/reset")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "circuit_breaker_reset"
+        assert data["circuit_breaker_tier"] == "NORMAL"
+

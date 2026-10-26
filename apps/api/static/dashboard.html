@@ -374,6 +374,16 @@
                         </svg>
                         Resume
                     </button>
+                    <!-- Desbloqueo directo de Circuit Breaker -->
+                    <button id="btn-reset-cb" class="btn"
+                        style="display:none;background:rgba(255,214,0,0.14);color:#ffd600;border-color:rgba(255,214,0,0.35);box-shadow:0 0 10px rgba(255,214,0,0.15)"
+                        onclick="resetCircuitBreaker()" title="Desbloquear compras pausadas por el Circuit Breaker">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
+                        </svg>
+                        <span id="txt-reset-cb">Desbloquear Compras</span>
+                    </button>
                 </div>
             </header>
 
@@ -1900,6 +1910,9 @@
             const pillText = document.getElementById("system-status-text");
             const btnKill = document.getElementById("btn-kill-switch");
             const btnResume = document.getElementById("btn-resume");
+            const btnResetCb = document.getElementById("btn-reset-cb");
+            const txtResetCb = document.getElementById("txt-reset-cb");
+            const isCbBlocked = Boolean(data.circuit_breaker_tier && data.circuit_breaker_tier !== 'NORMAL');
 
             if (data.kill_switch_active) {
                 pill.style.background = 'rgba(255,23,68,0.12)';
@@ -1908,6 +1921,18 @@
                 pillText.textContent = "HALTED: " + (data.kill_switch_reason || "KILL SWITCH");
                 btnKill.style.display = "none";
                 btnResume.style.display = "inline-flex";
+                if (btnResetCb) btnResetCb.style.display = "none";
+            } else if (isCbBlocked) {
+                pill.style.background = 'rgba(255,214,0,0.12)';
+                pill.style.color = '#ffd600';
+                pill.style.borderColor = 'rgba(255,214,0,0.35)';
+                pillText.textContent = "BLOQUEADO: " + data.circuit_breaker_tier;
+                btnKill.style.display = "inline-flex";
+                btnResume.style.display = "none";
+                if (btnResetCb) {
+                    btnResetCb.style.display = "inline-flex";
+                    if (txtResetCb) txtResetCb.textContent = `Desbloquear (${data.circuit_breaker_tier})`;
+                }
             } else {
                 pill.style.background = 'rgba(0,230,118,0.1)';
                 pill.style.color = '#00e676';
@@ -1915,6 +1940,7 @@
                 pillText.textContent = "SYSTEM ACTIVE";
                 btnKill.style.display = "inline-flex";
                 btnResume.style.display = "none";
+                if (btnResetCb) btnResetCb.style.display = "none";
             }
 
             // Auto-Trade state sync
@@ -2886,6 +2912,25 @@
                 console.error("Failed to reset paper account:", err);
             } finally {
                 btn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Reset Account`;
+            }
+        }
+
+        async function resetCircuitBreaker() {
+            const btn = document.getElementById("btn-reset-cb");
+            if (btn) btn.disabled = true;
+            try {
+                const res = await fetch(`${API_BASE}/api/v1/control/circuit-breaker/reset`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" }
+                });
+                if (res.ok) {
+                    showConnectionStatus('sse', '⚡ Circuit Breaker restablecido a NORMAL. Operando.');
+                    await fetchTelemetry();
+                }
+            } catch (err) {
+                console.error("Failed to reset circuit breaker:", err);
+            } finally {
+                if (btn) btn.disabled = false;
             }
         }
 
