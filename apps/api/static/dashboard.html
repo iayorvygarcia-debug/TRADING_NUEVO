@@ -1772,10 +1772,11 @@
             telemetryTimeoutId = setTimeout(fetchTelemetry, delayMs);
         }
 
-        async function fetchTelemetry() {
-            if (isFetchingTelemetry || sseActive) return;
+        async function fetchTelemetry(force = false) {
+            if (isFetchingTelemetry) return;
+            if (sseActive && !force) return;
             isFetchingTelemetry = true;
-            let nextDelay = 20000;
+            let nextDelay = 12000;
             try {
                 const res = await fetch(`${API_BASE}/api/v1/telemetry`, { cache: 'no-store' });
                 if (res.status === 429) {
@@ -1785,12 +1786,14 @@
                     nextDelay = pauseSecs * 1000;
                     return;
                 }
-                if (!res.ok) { consecutiveErrors++; nextDelay = 25000; return; }
+                if (!res.ok) { consecutiveErrors++; nextDelay = 20000; return; }
                 rateLimitCount = 0; consecutiveErrors = 0;
                 hideRateLimitNotice();
-                updateUI(await res.json());
+                const data = await res.json();
+                updateUI(data);
             } catch (err) {
-                nextDelay = 25000;
+                console.warn('[Telemetry] Error fetching telemetry:', err);
+                nextDelay = 20000;
             } finally {
                 isFetchingTelemetry = false;
                 if (!sseActive) scheduleNextTelemetry(document.hidden ? 60000 : nextDelay);
@@ -1799,11 +1802,16 @@
 
         // ── SSE: Modo principal de recepción de datos ─────────────────────
         function initSSE() {
-            if (sseSource) { sseSource.close(); sseSource = null; }
+            if (sseSource) { 
+                try { sseSource.close(); } catch(e) {}
+                sseSource = null; 
+            }
 
             const sseUrl = `${API_BASE}/api/v1/stream`;
             console.info(`[SSE] Conectando a ${sseUrl}`);
-            showConnectionStatus('warn', 'Conectando con el motor de trading...');
+            if (!sseActive) {
+                showConnectionStatus('warn', 'Conectando con el motor de trading...');
+            }
 
             try {
                 sseSource = new EventSource(sseUrl);
@@ -1812,16 +1820,20 @@
                     sseActive = true;
                     sseRetries = 0;
                     rateLimitCount = 0;
-                    // Cancelar cualquier polling que estuviera corriendo
                     if (telemetryTimeoutId) { clearTimeout(telemetryTimeoutId); telemetryTimeoutId = null; }
-                    showConnectionStatus('sse', '⚡ Quant OS — Conexión SSE activa (0 rate-limits posibles)');
-                    console.info('[SSE] Conexión persistente establecida. Cero peticiones adicionales al servidor.');
+                    showConnectionStatus('sse', '⚡ Quant OS — Conexión SSE activa (0 rate-limits)');
+                    console.info('[SSE] Conexión persistente establecida.');
                 };
 
                 sseSource.onmessage = (event) => {
                     try {
                         const data = JSON.parse(event.data);
-                        if (data && !data.status) {  // ignorar mensajes de control
+                        if (data && data.status === "connecting") {
+                            // Backend inicializando snapshot, solicitar telemetría REST de inmediato
+                            fetchTelemetry(true);
+                            return;
+                        }
+                        if (data && !data.status) {
                             hideRateLimitNotice();
                             updateUI(data);
                         }
@@ -1832,28 +1844,23 @@
 
                 sseSource.onerror = (err) => {
                     sseActive = false;
-                    sseSource.close();
+                    try { sseSource.close(); } catch(e) {}
                     sseSource = null;
                     sseRetries++;
 
-                    // Backoff exponencial: 5s, 10s, 20s, 40s... máx 120s
-                    const backoff = Math.min(5000 * Math.pow(2, sseRetries - 1), 120000);
-                    console.warn(`[SSE] Desconectado. Reintentando SSE en ${backoff/1000}s (intento ${sseRetries})...`);
-                    showConnectionStatus('warn', `Reconectando... (${backoff/1000}s)`);
+                    console.warn(`[SSE] Conexión cerrada o no soportada. Activando telemetría REST...`);
+                    // Fallback inmediato a telemetría REST sin esperar
+                    fetchTelemetry(true);
+                    scheduleNextTelemetry(10000);
 
-                    // Si SSE falla muchas veces, usar polling como respaldo temporal
-                    if (sseRetries > 3) {
-                        console.warn('[SSE] Múltiples fallos. Activando polling de respaldo...');
-                        scheduleNextTelemetry(20000);
-                    }
-
+                    const backoff = Math.min(10000 * Math.pow(1.5, sseRetries - 1), 60000);
                     setTimeout(initSSE, backoff);
                 };
 
             } catch (e) {
-                // EventSource no disponible (muy poco probable en browsers modernos)
-                console.warn('[SSE] EventSource no disponible. Usando polling de respaldo.');
-                fetchTelemetry();
+                console.warn('[SSE] EventSource no disponible. Usando telemetría REST periódica.');
+                fetchTelemetry(true);
+                scheduleNextTelemetry(12000);
             }
         }
 
@@ -3004,7 +3011,9 @@
         // ─── Boot & Initial Route Resolution ───
         const initialPath = window.location.pathname.replace(BASE_PATH, '').replace(/^\/+/, '').toLowerCase();
         switchView(initialPath || 'dashboard', false);
-        initSSE(); // Inicia SSE como modo principal (1 conexión persistente, 0 rate-limits)
+        fetchTelemetry(true); // ¡Carga inmediata de datos en menos de 200ms!
+        loadPortfolioHistory(); // Carga de la curva de equity en paralelo
+        initSSE(); // Mantiene la conexión en vivo vía streaming o polling
     </script>
 </body>
 

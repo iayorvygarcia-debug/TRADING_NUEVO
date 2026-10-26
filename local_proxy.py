@@ -30,6 +30,7 @@ import time
 import threading
 import webbrowser
 import json
+import os
 
 
 LOCAL_PORT = 8765
@@ -87,6 +88,34 @@ class TradingProxy(http.server.BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
     def _proxy(self, method):
+        # 1. Entrega local ultrarrápida del Dashboard (0ms, sin tocar la red)
+        clean_p = self.path.split("?")[0].rstrip("/")
+        if clean_p in ["", "/dashboard", "/portfolio", "/orders", "/scanner", "/macro", "/sec", "/backtests", "/settings"]:
+            local_dash = os.path.join(os.path.dirname(__file__), "apps", "api", "static", "dashboard.html")
+            if os.path.exists(local_dash):
+                try:
+                    with open(local_dash, "rb") as f:
+                        content = f.read()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(content)))
+                    self.send_header("Cache-Control", "no-cache")
+                    self._add_cors_headers()
+                    self.end_headers()
+                    self.wfile.write(content)
+                    return
+                except Exception as ex:
+                    print(f"  [-] Error leyendo dashboard local: {ex}")
+
+        # 2. Si la petición es para el stream de SSE, delegar inmediatamente a polling para evitar que el proxy bloquee
+        if "api/v1/stream" in self.path:
+            self.send_response(503)
+            self.send_header("Content-Type", "application/json")
+            self._add_cors_headers()
+            self.end_headers()
+            self.wfile.write(b'{"status":"stream_not_supported_in_proxy"}')
+            return
+
         remote_url = REMOTE_BASE + self.path
 
         # Read request body if present
@@ -197,8 +226,8 @@ if __name__ == "__main__":
     except Exception as ex:
         print(f"  ⚠️  No se pudo verificar: {ex}")
 
-    # Start local server
-    server = http.server.HTTPServer(("localhost", LOCAL_PORT), TradingProxy)
+    # Start local server (ThreadingHTTPServer para peticiones concurrentes)
+    server = http.server.ThreadingHTTPServer(("localhost", LOCAL_PORT), TradingProxy)
     print(f"\n  🚀 Proxy local iniciado en http://localhost:{LOCAL_PORT}")
     print(f"  📊 Dashboard disponible en http://localhost:{LOCAL_PORT}/dashboard")
     print(f"  ⌨️  Presiona Ctrl+C para detener\n")
